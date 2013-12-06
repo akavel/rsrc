@@ -37,6 +37,13 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
+	out, err := os.Create(fname + ".res")
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
 	fmt.Println(string(manifest))
 
 	return nil
