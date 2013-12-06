@@ -16,8 +16,9 @@ func main() {
 
 func run() error {
 	if len(os.Args) <= 1 {
-		return fmt.Errorf("USAGE: %s FILE.exe.manifest\n" +
-			"Generates a.res\n")
+		return fmt.Errorf("USAGE: %s FILE.exe.manifest\n"+
+			"Generates FILE.res",
+			os.Args[0])
 	}
 	return nil
 }
