@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"unsafe"
 )
 
 func main() {
@@ -45,7 +46,7 @@ func run() error {
 	}
 	defer out.Close()
 
-	header := pe.FileHeader{
+	coffhdr := pe.FileHeader{
 		Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
 		NumberOfSections:     1,      // .rsrc
 		TimeDateStamp:        0,      // was also 0 in sample data from MinGW's windres.exe
@@ -54,12 +55,24 @@ func run() error {
 		SizeOfOptionalHeader: 0,
 		Characteristics:      0x0104, //FIXME: copied from windres.exe output, find out what should be here and why
 	}
-	err = binary.Write(out, binary.LittleEndian, header)
+	err = binary.Write(out, binary.LittleEndian, coffhdr)
 	if err != nil {
 		return fmt.Errorf("Error writing COFF header: %s", err)
 	}
 
+	secthdr := pe.SectionHeader32{
+		Name:             [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0},
+		SizeOfRawData:    uint32(len(manifest)), //FIXME: probably must include all the .rsrc directory structures too
+		PointerToRawData: uint32(unsafe.Sizeof(pe.FileHeader{}) + unsafe.Sizeof(pe.SectionHeader32{})),
+		Characteristics:  0x40000040, // "INITIALIZED_DATA MEM_READ" ?
+	}
+	err = binary.Write(out, binary.LittleEndian, secthdr)
+	if err != nil {
+		return fmt.Errorf("Error writing .rsrc section header: %s", err)
+	}
+
 	fmt.Println(string(manifest))
+	fmt.Println(secthdr)
 
 	return nil
 }
