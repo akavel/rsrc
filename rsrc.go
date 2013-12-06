@@ -1,7 +1,8 @@
 package main
 
 import (
-	//"debug/pe"
+	"debug/pe"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -43,6 +44,20 @@ func run() error {
 		return err
 	}
 	defer out.Close()
+
+	header := pe.FileHeader{
+		Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
+		NumberOfSections:     1,      // .rsrc
+		TimeDateStamp:        0,      // was also 0 in sample data from MinGW's windres.exe
+		PointerToSymbolTable: 0,
+		NumberOfSymbols:      0,
+		SizeOfOptionalHeader: 0,
+		Characteristics:      0x0104, //FIXME: copied from windres.exe output, find out what should be here and why
+	}
+	err = binary.Write(out, binary.LittleEndian, header)
+	if err != nil {
+		return fmt.Errorf("Error writing COFF header: %s", err)
+	}
 
 	fmt.Println(string(manifest))
 
