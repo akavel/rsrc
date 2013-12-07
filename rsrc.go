@@ -35,6 +35,7 @@ type ImageResourceDataEntry struct {
 
 const (
 	MASK_SUBDIRECTORY = 1 << 31
+	TYPE_MANIFEST     = 24
 )
 
 type Writer struct {
@@ -108,7 +109,7 @@ func run() error {
 	secthdr := pe.SectionHeader32{
 		Name:             [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0},
 		SizeOfRawData:    uint32(len(manifest)), //FIXME: probably must include all the .rsrc directory structures too
-		PointerToRawData: uint32(unsafe.Sizeof(pe.FileHeader{}) + unsafe.Sizeof(pe.SectionHeader32{})),
+		PointerToRawData: w.Offset + uint32(unsafe.Sizeof(pe.SectionHeader32{})),
 		Characteristics:  0x40000040, // "INITIALIZED_DATA MEM_READ" ?
 	}
 	w.WriteLE(secthdr)
@@ -116,8 +117,46 @@ func run() error {
 		return fmt.Errorf("Error writing .rsrc section header: %s", w.Err)
 	}
 
-	fmt.Println(string(manifest))
-	fmt.Println(secthdr)
+	// now, build "directory hierarchy" of .rsrc section: first type, then id/name, then language
+
+	diroff := w.Offset // all "OffsetToData" are relative to this point
+
+	w.WriteLE(ImageResourceDirectory{
+		NumberOfIdEntries: 1,
+	})
+	w.WriteLE(ImageResourceDirectoryEntry{
+		NameOrId:     TYPE_MANIFEST,
+		OffsetToData: MASK_SUBDIRECTORY | (w.Offset + uint32(unsafe.Sizeof(ImageResourceDirectoryEntry{})) - diroff),
+	})
+	w.WriteLE(ImageResourceDirectory{
+		NumberOfIdEntries: 1,
+	})
+	w.WriteLE(ImageResourceDirectoryEntry{
+		NameOrId:     1, // ID
+		OffsetToData: MASK_SUBDIRECTORY | (w.Offset + uint32(unsafe.Sizeof(ImageResourceDirectoryEntry{})) - diroff),
+	})
+	w.WriteLE(ImageResourceDirectory{
+		NumberOfIdEntries: 1,
+	})
+	w.WriteLE(ImageResourceDirectoryEntry{
+		NameOrId:     0x0409, //FIXME: language; what value should be here?
+		OffsetToData: w.Offset + uint32(unsafe.Sizeof(ImageResourceDirectoryEntry{})) - diroff,
+	})
+
+	w.WriteLE(ImageResourceDataEntry{
+		OffsetToData: w.Offset + uint32(unsafe.Sizeof(ImageResourceDataEntry{})) - diroff,
+		Size1:        uint32(len(manifest)),
+		CodePage:     0, //FIXME: what value here? for now just tried 0
+	})
+
+	if w.Err != nil {
+		return fmt.Errorf("Error writing .rsrc Directory Hierarchy: %s", w.Err)
+	}
+
+	_, err = w.W.Write(manifest)
+	if err != nil {
+		return fmt.Errorf("Error writing manifest contents: %s", err)
+	}
 
 	return nil
 }
