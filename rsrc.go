@@ -84,6 +84,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	manifest = append(manifest, byte(0)) // seems needed?
 
 	out, err := os.Create(fname + ".res")
 	if err != nil {
@@ -107,8 +108,11 @@ func run() error {
 	}
 
 	secthdr := pe.SectionHeader32{
-		Name:             [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0},
-		SizeOfRawData:    uint32(len(manifest)), //FIXME: probably must include all the .rsrc directory structures too
+		Name: [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0},
+		SizeOfRawData: uint32(3*unsafe.Sizeof(ImageResourceDirectory{})+
+			3*unsafe.Sizeof(ImageResourceDirectoryEntry{})+
+			1*unsafe.Sizeof(ImageResourceDataEntry{})) +
+			uint32(len(manifest)), //FIXME: probably must include all the .rsrc directory structures too
 		PointerToRawData: w.Offset + uint32(unsafe.Sizeof(pe.SectionHeader32{})),
 		Characteristics:  0x40000040, // "INITIALIZED_DATA MEM_READ" ?
 	}
