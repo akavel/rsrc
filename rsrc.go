@@ -4,11 +4,55 @@ import (
 	"debug/pe"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"strings"
 	"unsafe"
 )
+
+type ImageResourceDirectory struct {
+	Characteristics      uint32
+	TimeDateStamp        uint32
+	MajorVersion         uint16
+	MinorVersion         uint16
+	NumberOfNamedEntries uint16
+	NumberOfIdEntries    uint16
+}
+
+type ImageResourceDirectoryEntry struct {
+	NameOrId     uint32
+	OffsetToData uint32
+}
+
+type ImageResourceDataEntry struct {
+	OffsetToData uint32
+	Size1        uint32
+	CodePage     uint32
+	Reserved     uint32
+}
+
+const (
+	MASK_SUBDIRECTORY = 1 << 31
+)
+
+type Writer struct {
+	W      io.Writer
+	Offset uint32 //FIXME: uint64?
+	Err    error
+}
+
+func (w *Writer) WriteLE(v interface{}) {
+	if w.Err != nil {
+		return
+	}
+	w.Err = binary.Write(w.W, binary.LittleEndian, v)
+	if w.Err != nil {
+		return
+	}
+	w.Offset += uint32(reflect.TypeOf(v).Size())
+}
 
 func main() {
 	err := run()
@@ -45,6 +89,7 @@ func run() error {
 		return err
 	}
 	defer out.Close()
+	w := Writer{W: out}
 
 	coffhdr := pe.FileHeader{
 		Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
@@ -55,9 +100,9 @@ func run() error {
 		SizeOfOptionalHeader: 0,
 		Characteristics:      0x0104, //FIXME: copied from windres.exe output, find out what should be here and why
 	}
-	err = binary.Write(out, binary.LittleEndian, coffhdr)
-	if err != nil {
-		return fmt.Errorf("Error writing COFF header: %s", err)
+	w.WriteLE(coffhdr)
+	if w.Err != nil {
+		return fmt.Errorf("Error writing COFF header: %s", w.Err)
 	}
 
 	secthdr := pe.SectionHeader32{
@@ -66,9 +111,9 @@ func run() error {
 		PointerToRawData: uint32(unsafe.Sizeof(pe.FileHeader{}) + unsafe.Sizeof(pe.SectionHeader32{})),
 		Characteristics:  0x40000040, // "INITIALIZED_DATA MEM_READ" ?
 	}
-	err = binary.Write(out, binary.LittleEndian, secthdr)
-	if err != nil {
-		return fmt.Errorf("Error writing .rsrc section header: %s", err)
+	w.WriteLE(secthdr)
+	if w.Err != nil {
+		return fmt.Errorf("Error writing .rsrc section header: %s", w.Err)
 	}
 
 	fmt.Println(string(manifest))
