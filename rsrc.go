@@ -73,6 +73,14 @@ func run() error {
 			os.Args[0])
 	}
 
+	var fix1, fix2, fix3, fix4, fix5, fix6 uint32
+	//fix1=1 // ASCIIZ manifest & -1 to manifest length info (?)
+	fix2 = 0x02ca     // symbols (strings) table at the end
+	fix3 = 0x02c0     // relocations
+	fix4 = 0xc0300040 // section characteristics
+	fix5 = 0x52a26e9e // timestamp in rsrc directories
+	fix6 = 1          // force append stuff for fix2 & fix3 at end of file
+
 	fname := os.Args[1]
 	suffix := ".exe.manifest"
 	if !strings.HasSuffix(fname, suffix) {
@@ -84,7 +92,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	manifest = append(manifest, byte(0)) // seems needed?
+	if fix1 != 0 {
+		manifest = append(manifest, byte(0)) // seems needed?
+	}
 
 	out, err := os.Create(fname + ".res")
 	if err != nil {
@@ -97,8 +107,8 @@ func run() error {
 		Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
 		NumberOfSections:     1,      // .rsrc
 		TimeDateStamp:        0,      // was also 0 in sample data from MinGW's windres.exe
-		PointerToSymbolTable: 0,
-		NumberOfSymbols:      0,
+		PointerToSymbolTable: uint32(fix2),
+		NumberOfSymbols:      uint32(fix2 / 550),
 		SizeOfOptionalHeader: 0,
 		Characteristics:      0x0104, //FIXME: copied from windres.exe output, find out what should be here and why
 	}
@@ -113,8 +123,10 @@ func run() error {
 			3*unsafe.Sizeof(ImageResourceDirectoryEntry{})+
 			1*unsafe.Sizeof(ImageResourceDataEntry{})) +
 			uint32(len(manifest)), //FIXME: probably must include all the .rsrc directory structures too
-		PointerToRawData: w.Offset + uint32(unsafe.Sizeof(pe.SectionHeader32{})),
-		Characteristics:  0x40000040, // "INITIALIZED_DATA MEM_READ" ?
+		PointerToRawData:     w.Offset + uint32(unsafe.Sizeof(pe.SectionHeader32{})),
+		PointerToRelocations: uint32(fix3),
+		NumberOfRelocations:  uint16(fix3 / 540),
+		Characteristics:      0x40000040 | fix4, // "INITIALIZED_DATA MEM_READ" ?
 	}
 	w.WriteLE(secthdr)
 	if w.Err != nil {
@@ -127,6 +139,7 @@ func run() error {
 
 	w.WriteLE(ImageResourceDirectory{
 		NumberOfIdEntries: 1,
+		TimeDateStamp:     fix5,
 	})
 	w.WriteLE(ImageResourceDirectoryEntry{
 		NameOrId:     TYPE_MANIFEST,
@@ -134,6 +147,7 @@ func run() error {
 	})
 	w.WriteLE(ImageResourceDirectory{
 		NumberOfIdEntries: 1,
+		TimeDateStamp:     fix5,
 	})
 	w.WriteLE(ImageResourceDirectoryEntry{
 		NameOrId:     1, // ID
@@ -141,6 +155,7 @@ func run() error {
 	})
 	w.WriteLE(ImageResourceDirectory{
 		NumberOfIdEntries: 1,
+		TimeDateStamp:     fix5,
 	})
 	w.WriteLE(ImageResourceDirectoryEntry{
 		NameOrId:     0x0409, //FIXME: language; what value should be here?
@@ -149,12 +164,25 @@ func run() error {
 
 	w.WriteLE(ImageResourceDataEntry{
 		OffsetToData: w.Offset + uint32(unsafe.Sizeof(ImageResourceDataEntry{})) - diroff,
-		Size1:        uint32(len(manifest)),
+		Size1:        uint32(len(manifest)) - uint32(fix1),
 		CodePage:     0, //FIXME: what value here? for now just tried 0
 	})
 
 	if w.Err != nil {
 		return fmt.Errorf("Error writing .rsrc Directory Hierarchy: %s", w.Err)
+	}
+
+	if fix2+fix3+fix6 > 0 {
+		manifest = append(manifest, []byte{
+			0x48, 0, 0, 0,
+			0, 0, 0, 0,
+			7, 0, '.', 'r',
+			's', 'r', 'c', 0,
+			0, 0, 0, 0,
+			0, 0, 1, 0,
+			0, 0, 3, 0,
+			4, 0, 0, 0,
+		}...)
 	}
 
 	_, err = w.W.Write(manifest)
