@@ -9,7 +9,6 @@ import (
 	"os"
 	"reflect"
 	"strings"
-	"unsafe"
 )
 
 type ImageResourceDirectory struct {
@@ -33,6 +32,12 @@ type ImageResourceDataEntry struct {
 	Reserved     uint32
 }
 
+type RelocationEntry struct {
+	RVA         uint32 // "offset within the Section's raw data where the address starts."
+	SymbolIndex uint32 // "(zero based) index in the Symbol table to which the reference refers."
+	Type        uint16
+}
+
 type Symbol struct {
 	Name           [8]byte
 	Value          uint32
@@ -54,6 +59,14 @@ const (
 var (
 	STRING_RSRC = [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0}
 )
+
+func MustGetFieldOffset(t reflect.Type, field string) uintptr {
+	f, ok := t.FieldByName(field)
+	if !ok {
+		panic("field " + field + " not found")
+	}
+	return f.Offset
+}
 
 type Writer struct {
 	W      io.Writer
@@ -115,13 +128,17 @@ func run() error {
 	w := Writer{W: out}
 
 	// precalculate some important offsets in resulting file, that we must know earlier
-	rawdataoff := uint32(unsafe.Sizeof(pe.FileHeader{}) + unsafe.Sizeof(pe.SectionHeader32{}))
-	rawdatalen := uint32(3*unsafe.Sizeof(ImageResourceDirectory{})+
-		3*unsafe.Sizeof(ImageResourceDirectoryEntry{})+
-		1*unsafe.Sizeof(ImageResourceDataEntry{})) +
+	rawdataoff := uint32(binary.Size(pe.FileHeader{}) + binary.Size(pe.SectionHeader32{}))
+	hierarchylen := uint32(3*binary.Size(ImageResourceDirectory{}) +
+		3*binary.Size(ImageResourceDirectoryEntry{}))
+	rawdatalen := hierarchylen +
+		uint32(1*binary.Size(ImageResourceDataEntry{})) +
 		uint32(len(manifest))
 	diroff := rawdataoff
-	symoff := rawdataoff + rawdatalen
+	relocoff := rawdataoff + rawdatalen
+	relocp := hierarchylen + uint32(MustGetFieldOffset(reflect.TypeOf(ImageResourceDataEntry{}), "OffsetToData"))
+	reloclen := uint32(binary.Size(RelocationEntry{}))
+	symoff := relocoff + reloclen
 
 	coffhdr := pe.FileHeader{
 		Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
@@ -138,10 +155,12 @@ func run() error {
 	}
 
 	secthdr := pe.SectionHeader32{
-		Name:             STRING_RSRC,
-		SizeOfRawData:    rawdatalen,
-		PointerToRawData: rawdataoff,
-		Characteristics:  0x40000040, // "INITIALIZED_DATA MEM_READ" ?
+		Name:                 STRING_RSRC,
+		SizeOfRawData:        rawdatalen,
+		PointerToRawData:     rawdataoff,
+		PointerToRelocations: relocoff,
+		NumberOfRelocations:  1,
+		Characteristics:      0x40000040, // "INITIALIZED_DATA MEM_READ" ?
 	}
 	w.WriteLE(secthdr)
 	if w.Err != nil {
@@ -155,25 +174,25 @@ func run() error {
 	})
 	w.WriteLE(ImageResourceDirectoryEntry{
 		NameOrId:     TYPE_MANIFEST,
-		OffsetToData: MASK_SUBDIRECTORY | (w.Offset + uint32(unsafe.Sizeof(ImageResourceDirectoryEntry{})) - diroff),
+		OffsetToData: MASK_SUBDIRECTORY | (w.Offset + uint32(binary.Size(ImageResourceDirectoryEntry{})) - diroff),
 	})
 	w.WriteLE(ImageResourceDirectory{
 		NumberOfIdEntries: 1,
 	})
 	w.WriteLE(ImageResourceDirectoryEntry{
 		NameOrId:     1, // ID
-		OffsetToData: MASK_SUBDIRECTORY | (w.Offset + uint32(unsafe.Sizeof(ImageResourceDirectoryEntry{})) - diroff),
+		OffsetToData: MASK_SUBDIRECTORY | (w.Offset + uint32(binary.Size(ImageResourceDirectoryEntry{})) - diroff),
 	})
 	w.WriteLE(ImageResourceDirectory{
 		NumberOfIdEntries: 1,
 	})
 	w.WriteLE(ImageResourceDirectoryEntry{
 		NameOrId:     0x0409, //FIXME: language; what value should be here?
-		OffsetToData: w.Offset + uint32(unsafe.Sizeof(ImageResourceDirectoryEntry{})) - diroff,
+		OffsetToData: w.Offset + uint32(binary.Size(ImageResourceDirectoryEntry{})) - diroff,
 	})
 
 	w.WriteLE(ImageResourceDataEntry{
-		OffsetToData: w.Offset + uint32(unsafe.Sizeof(ImageResourceDataEntry{})) - diroff,
+		OffsetToData: w.Offset + uint32(binary.Size(ImageResourceDataEntry{})) - diroff,
 		Size1:        uint32(len(manifest)),
 		CodePage:     0, //FIXME: what value here? for now just tried 0
 	})
@@ -198,6 +217,12 @@ func run() error {
 		return fmt.Errorf("Error writing manifest contents: %s", err)
 	}
 
+	w.WriteLE(RelocationEntry{
+		RVA:         relocp, // FIXME: IIUC, this resolves to value contained in ImageResourceDataEntry.OffsetToData
+		SymbolIndex: 0,      // "(zero based) index in the Symbol table to which the reference refers. Once you have loaded the COFF file into memory and know where each symbol is, you find the new updated address for the given symbol and update the reference accordingly."
+		Type:        7,      // according to ldpe.c, this decodes to: IMAGE_REL_I386_DIR32NB
+	})
+
 	w.WriteLE(Symbol{
 		Name:           STRING_RSRC,
 		Value:          0,
@@ -208,7 +233,7 @@ func run() error {
 	})
 
 	w.WriteLE(StringsHeader{
-		Length: uint32(unsafe.Sizeof(StringsHeader{})), // empty strings table -- but we must still show size of the table's header...
+		Length: uint32(binary.Size(StringsHeader{})), // empty strings table -- but we must still show size of the table's header...
 	})
 
 	if w.Err != nil {
