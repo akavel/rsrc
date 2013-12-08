@@ -1,3 +1,0 @@
-#include "winuser.h"
-//2 RT_MANIFEST "app.dll.manifest" //dll only
-1 RT_MANIFEST "example.exe.manifest" //exe only

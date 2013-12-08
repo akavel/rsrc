@@ -1,1 +1,0 @@
-windres --input=app.rc --input-format=rc --output=app.res --output-format=coff
