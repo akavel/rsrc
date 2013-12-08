@@ -141,6 +141,7 @@ func run() error {
 		Name:             STRING_RSRC,
 		SizeOfRawData:    rawdatalen,
 		PointerToRawData: rawdataoff,
+		Characteristics:  0x40000040, // "INITIALIZED_DATA MEM_READ" ?
 	}
 	w.WriteLE(secthdr)
 	if w.Err != nil {
