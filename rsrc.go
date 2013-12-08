@@ -105,9 +105,6 @@ func run() error {
 
 	//TODO: try to simplify by adding fake section at beginning, containing strings table in data, and characteristics saying "drop me when linking"
 
-	//var fix2 uint32
-	//fix2 = 0x02ca // symbols (strings) table at the end
-
 	fname := os.Args[1]
 	suffix := ".exe.manifest"
 	if !strings.HasSuffix(fname, suffix) {
@@ -200,17 +197,6 @@ func run() error {
 	if w.Err != nil {
 		return fmt.Errorf("Error writing .rsrc Directory Hierarchy: %s", w.Err)
 	}
-
-	//if fix2 > 0 {
-	//	manifest = append(manifest, []byte{
-	//		'.', 'r',
-	//		's', 'r', 'c', 0,
-	//		0, 0, 0, 0,
-	//		0, 0, 1, 0,
-	//		0, 0, 3, 0,
-	//		4, 0, 0, 0,
-	//	}...)
-	//}
 
 	_, err = w.W.Write(manifest)
 	if err != nil {
