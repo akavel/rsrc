@@ -210,5 +210,9 @@ func run() error {
 		Length: uint32(unsafe.Sizeof(StringsHeader{})), // empty strings table -- but we must still show size of the table's header...
 	})
 
+	if w.Err != nil {
+		return fmt.Errorf("Error writing .rsrc Symbol Table & Strings: %s", w.Err)
+	}
+
 	return nil
 }
