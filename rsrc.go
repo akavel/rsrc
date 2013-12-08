@@ -75,11 +75,11 @@ func run() error {
 
 	var fix1, fix2, fix3, fix4, fix5, fix6 uint32
 	//fix1=1 // ASCIIZ manifest & -1 to manifest length info (?)
-	fix2 = 0x02ca     // symbols (strings) table at the end
-	fix3 = 0x02c0     // relocations
-	fix4 = 0xc0300040 // section characteristics
-	fix5 = 0x52a26e9e // timestamp in rsrc directories
-	fix6 = 1          // force append stuff for fix2 & fix3 at end of file
+	fix2 = 0x02ca // symbols (strings) table at the end
+	fix3 = 0x02c0 // relocations
+	//fix4 = 0xc0300040 // section characteristics
+	//fix5 = 0x52a26e9e // timestamp in rsrc directories
+	fix6 = 1 // force append stuff for fix2 & fix3 at end of file
 
 	fname := os.Args[1]
 	suffix := ".exe.manifest"
