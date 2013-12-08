@@ -97,12 +97,21 @@ func run() error {
 	defer out.Close()
 	w := Writer{W: out}
 
+	// precalculate some important offsets in resulting file, that we must know earlier
+	rawdataoff := uint32(unsafe.Sizeof(pe.FileHeader{}) + unsafe.Sizeof(pe.SectionHeader32{}))
+	rawdatalen := uint32(3*unsafe.Sizeof(ImageResourceDirectory{})+
+		3*unsafe.Sizeof(ImageResourceDirectoryEntry{})+
+		1*unsafe.Sizeof(ImageResourceDataEntry{})) +
+		uint32(len(manifest))
+	diroff := rawdataoff
+	symoff := rawdataoff + rawdatalen
+
 	coffhdr := pe.FileHeader{
 		Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
 		NumberOfSections:     1,      // .rsrc
 		TimeDateStamp:        0,      // was also 0 in sample data from MinGW's windres.exe
-		PointerToSymbolTable: uint32(fix2),
-		NumberOfSymbols:      uint32(fix2 / 550),
+		PointerToSymbolTable: uint32(symoff),
+		NumberOfSymbols:      1,
 		SizeOfOptionalHeader: 0,
 		Characteristics:      0x0104, //FIXME: copied from windres.exe output, find out what should be here and why
 	}
@@ -112,12 +121,9 @@ func run() error {
 	}
 
 	secthdr := pe.SectionHeader32{
-		Name: [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0},
-		SizeOfRawData: uint32(3*unsafe.Sizeof(ImageResourceDirectory{})+
-			3*unsafe.Sizeof(ImageResourceDirectoryEntry{})+
-			1*unsafe.Sizeof(ImageResourceDataEntry{})) +
-			uint32(len(manifest)), //FIXME: probably must include all the .rsrc directory structures too
-		PointerToRawData: w.Offset + uint32(unsafe.Sizeof(pe.SectionHeader32{})),
+		Name:             [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0},
+		SizeOfRawData:    rawdatalen,
+		PointerToRawData: rawdataoff,
 	}
 	w.WriteLE(secthdr)
 	if w.Err != nil {
@@ -125,8 +131,6 @@ func run() error {
 	}
 
 	// now, build "directory hierarchy" of .rsrc section: first type, then id/name, then language
-
-	diroff := w.Offset // all "OffsetToData" are relative to this point
 
 	w.WriteLE(ImageResourceDirectory{
 		NumberOfIdEntries: 1,
@@ -162,9 +166,7 @@ func run() error {
 
 	if fix2 > 0 {
 		manifest = append(manifest, []byte{
-			0x48, 0, 0, 0,
-			0, 0, 0, 0,
-			7, 0, '.', 'r',
+			'.', 'r',
 			's', 'r', 'c', 0,
 			0, 0, 0, 0,
 			0, 0, 1, 0,
