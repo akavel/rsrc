@@ -3,12 +3,12 @@ package main
 import (
 	"debug/pe"
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"reflect"
-	"strings"
 )
 
 type ImageResourceDirectory struct {
@@ -86,38 +86,35 @@ func (w *Writer) WriteLE(v interface{}) {
 }
 
 func main() {
-	err := run()
+	//TODO: allow in options advanced specification of multiple resources, as a tree (json?)
+	var fnamein, fnameout string
+	flags := flag.NewFlagSet("", flag.ContinueOnError)
+	flags.StringVar(&fnamein, "manifest", "", "REQUIRED: path to Windows manifest file")
+	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
+	_ = flags.Parse(os.Args[1:])
+	if fnamein == "" {
+		fmt.Fprintf(os.Stderr, "USAGE: %s -manifest FILE.exe.manifest [-o FILE.syso]\n"+
+			"Generates a .syso file with resources in .rsrc section, for consumption by Go linker.\n"+
+			"OPTIONS:\n",
+			os.Args[0])
+		flags.PrintDefaults()
+		os.Exit(1)
+	}
+
+	err := run(fnamein, fnameout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
-	//TODO: allow options:
-	// -o FILENAME - output file name
-	// + advanced specification of multiple resources, as a tree (json?)
-	if len(os.Args) <= 1 {
-		return fmt.Errorf("USAGE: %s FILE.exe.manifest\n"+
-			"Generates FILE.res",
-			os.Args[0])
-	}
-
-	//TODO: try to simplify by adding fake section at beginning, containing strings table in data, and characteristics saying "drop me when linking"
-
-	fname := os.Args[1]
-	suffix := ".exe.manifest"
-	if !strings.HasSuffix(fname, suffix) {
-		return fmt.Errorf("Filename '%s' does not end in suffix '%s'", fname, suffix)
-	}
-	fname = fname[:len(fname)-len(suffix)]
-
-	manifest, err := ioutil.ReadFile(fname + suffix)
+func run(fnamein, fnameout string) error {
+	manifest, err := ioutil.ReadFile(fnamein)
 	if err != nil {
 		return err
 	}
 
-	out, err := os.Create(fname + ".res")
+	out, err := os.Create(fnameout)
 	if err != nil {
 		return err
 	}
@@ -125,6 +122,7 @@ func run() error {
 	w := Writer{W: out}
 
 	// precalculate some important offsets in resulting file, that we must know earlier
+	//TODO: try to simplify by adding fake section at beginning, containing strings table in data, and characteristics saying "drop me when linking"
 	rawdataoff := uint32(binary.Size(pe.FileHeader{}) + binary.Size(pe.SectionHeader32{}))
 	hierarchylen := uint32(3*binary.Size(ImageResourceDirectory{}) +
 		3*binary.Size(ImageResourceDirectoryEntry{}))
