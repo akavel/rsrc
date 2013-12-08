@@ -33,9 +33,26 @@ type ImageResourceDataEntry struct {
 	Reserved     uint32
 }
 
+type Symbol struct {
+	Name           [8]byte
+	Value          uint32
+	SectionNumber  uint16
+	Type           uint16
+	StorageClass   uint8
+	AuxiliaryCount uint8
+}
+
+type StringsHeader struct {
+	Length uint32
+}
+
 const (
 	MASK_SUBDIRECTORY = 1 << 31
 	TYPE_MANIFEST     = 24
+)
+
+var (
+	STRING_RSRC = [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0}
 )
 
 type Writer struct {
@@ -121,7 +138,7 @@ func run() error {
 	}
 
 	secthdr := pe.SectionHeader32{
-		Name:             [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0},
+		Name:             STRING_RSRC,
 		SizeOfRawData:    rawdatalen,
 		PointerToRawData: rawdataoff,
 	}
@@ -179,6 +196,19 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("Error writing manifest contents: %s", err)
 	}
+
+	w.WriteLE(Symbol{
+		Name:           STRING_RSRC,
+		Value:          0,
+		SectionNumber:  1,
+		Type:           0, // FIXME: wtf?
+		StorageClass:   3, // FIXME: is it ok? and uint8? and what does the value mean?
+		AuxiliaryCount: 0, // FIXME: wtf?
+	})
+
+	w.WriteLE(StringsHeader{
+		Length: uint32(unsafe.Sizeof(StringsHeader{})), // empty strings table -- but we must still show size of the table's header...
+	})
 
 	return nil
 }
