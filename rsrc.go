@@ -84,6 +84,11 @@ func (w *Writer) WriteLE(v interface{}) {
 	w.Offset += uint32(reflect.TypeOf(v).Size())
 }
 
+type SizedReader interface {
+	io.Reader
+	Size() int64
+}
+
 func (w *Writer) WriteFromSized(r SizedReader) {
 	if w.Err != nil {
 		return
@@ -93,9 +98,28 @@ func (w *Writer) WriteFromSized(r SizedReader) {
 	w.Offset += uint32(n)
 }
 
-type SizedReader interface {
-	io.Reader
-	Size() int64
+type SizedFile struct {
+	f *os.File
+	s *io.SectionReader // helper, for Size()
+}
+
+func (r *SizedFile) Read(p []byte) (n int, err error) { return r.s.Read(p) }
+func (r *SizedFile) Size() int64                      { return r.s.Size() }
+func (r *SizedFile) Close() error                     { return r.f.Close() }
+
+func SizedOpen(filename string) (*SizedFile, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	return &SizedFile{
+		f: f,
+		s: io.NewSectionReader(f, 0, info.Size()),
+	}, nil
 }
 
 func main() {
@@ -123,19 +147,11 @@ func main() {
 }
 
 func run(fnamein, fnameout string) error {
-	var manifest SizedReader
-	{
-		f, err := os.Open(fnamein)
-		if err != nil {
-			return fmt.Errorf("Error opening manifest file '%s': %s", fnamein, err)
-		}
-		defer f.Close()
-		info, err := f.Stat()
-		if err != nil {
-			return err
-		}
-		manifest = io.NewSectionReader(f, 0, info.Size())
+	manifest, err := SizedOpen(fnamein)
+	if err != nil {
+		return fmt.Errorf("Error opening manifest file '%s': %s", fnamein, err)
 	}
+	defer manifest.Close()
 
 	out, err := os.Create(fnameout)
 	if err != nil {
