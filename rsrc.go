@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"reflect"
 )
@@ -70,7 +69,7 @@ func MustGetFieldOffset(t reflect.Type, field string) uintptr {
 
 type Writer struct {
 	W      io.Writer
-	Offset uint32 //FIXME: uint64?
+	Offset uint32 //FIXME: int64?
 	Err    error
 }
 
@@ -83,6 +82,20 @@ func (w *Writer) WriteLE(v interface{}) {
 		return
 	}
 	w.Offset += uint32(reflect.TypeOf(v).Size())
+}
+
+func (w *Writer) WriteFromSized(r SizedReader) {
+	if w.Err != nil {
+		return
+	}
+	var n int64
+	n, w.Err = io.CopyN(w.W, r, r.Size())
+	w.Offset += uint32(n)
+}
+
+type SizedReader interface {
+	io.Reader
+	Size() int64
 }
 
 func main() {
@@ -110,9 +123,18 @@ func main() {
 }
 
 func run(fnamein, fnameout string) error {
-	manifest, err := ioutil.ReadFile(fnamein)
-	if err != nil {
-		return err
+	var manifest SizedReader
+	{
+		f, err := os.Open(fnamein)
+		if err != nil {
+			return fmt.Errorf("Error opening manifest file '%s': %s", fnamein, err)
+		}
+		defer f.Close()
+		info, err := f.Stat()
+		if err != nil {
+			return err
+		}
+		manifest = io.NewSectionReader(f, 0, info.Size())
 	}
 
 	out, err := os.Create(fnameout)
@@ -129,7 +151,7 @@ func run(fnamein, fnameout string) error {
 		3*binary.Size(ImageResourceDirectoryEntry{}))
 	rawdatalen := hierarchylen +
 		uint32(1*binary.Size(ImageResourceDataEntry{})) +
-		uint32(len(manifest))
+		uint32(manifest.Size())
 	diroff := rawdataoff
 	relocoff := rawdataoff + rawdatalen
 	relocp := hierarchylen + uint32(MustGetFieldOffset(reflect.TypeOf(ImageResourceDataEntry{}), "OffsetToData"))
@@ -179,18 +201,11 @@ func run(fnamein, fnameout string) error {
 
 	w.WriteLE(ImageResourceDataEntry{
 		OffsetToData: w.Offset + uint32(binary.Size(ImageResourceDataEntry{})) - diroff,
-		Size1:        uint32(len(manifest)),
+		Size1:        uint32(manifest.Size()),
 		CodePage:     0, //FIXME: what value here? for now just tried 0
 	})
 
-	if w.Err != nil {
-		return fmt.Errorf("Error writing preamble: %s", w.Err)
-	}
-
-	_, err = w.W.Write(manifest)
-	if err != nil {
-		return fmt.Errorf("Error writing manifest contents: %s", err)
-	}
+	w.WriteFromSized(manifest)
 
 	w.WriteLE(RelocationEntry{
 		RVA:         relocp, // FIXME: IIUC, this resolves to value contained in ImageResourceDataEntry.OffsetToData
