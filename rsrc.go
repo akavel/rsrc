@@ -136,7 +136,7 @@ func run(fnamein, fnameout string) error {
 	reloclen := uint32(binary.Size(RelocationEntry{}))
 	symoff := relocoff + reloclen
 
-	coffhdr := pe.FileHeader{
+	w.WriteLE(pe.FileHeader{
 		Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
 		NumberOfSections:     1,      // .rsrc
 		TimeDateStamp:        0,      // was also 0 in sample data from MinGW's windres.exe
@@ -144,27 +144,17 @@ func run(fnamein, fnameout string) error {
 		NumberOfSymbols:      1,
 		SizeOfOptionalHeader: 0,
 		Characteristics:      0x0104, //FIXME: copied from windres.exe output, find out what should be here and why
-	}
-	w.WriteLE(coffhdr)
-	if w.Err != nil {
-		return fmt.Errorf("Error writing COFF header: %s", w.Err)
-	}
-
-	secthdr := pe.SectionHeader32{
+	})
+	w.WriteLE(pe.SectionHeader32{
 		Name:                 STRING_RSRC,
 		SizeOfRawData:        rawdatalen,
 		PointerToRawData:     rawdataoff,
 		PointerToRelocations: relocoff,
 		NumberOfRelocations:  1,
 		Characteristics:      0x40000040, // "INITIALIZED_DATA MEM_READ" ?
-	}
-	w.WriteLE(secthdr)
-	if w.Err != nil {
-		return fmt.Errorf("Error writing .rsrc section header: %s", w.Err)
-	}
+	})
 
 	// now, build "directory hierarchy" of .rsrc section: first type, then id/name, then language
-
 	w.WriteLE(ImageResourceDirectory{
 		NumberOfIdEntries: 1,
 	})
@@ -194,7 +184,7 @@ func run(fnamein, fnameout string) error {
 	})
 
 	if w.Err != nil {
-		return fmt.Errorf("Error writing .rsrc Directory Hierarchy: %s", w.Err)
+		return fmt.Errorf("Error writing preamble: %s", w.Err)
 	}
 
 	_, err = w.W.Write(manifest)
