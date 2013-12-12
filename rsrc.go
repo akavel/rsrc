@@ -1,5 +1,9 @@
 package main
 
+// TODO:
+// - to store icons, see: http://blogs.msdn.com/b/oldnewthing/archive/2012/07/20/10331787.aspx
+//   - also need to first read and split input ico file
+
 import (
 	"debug/pe"
 	"encoding/binary"
@@ -52,7 +56,10 @@ type StringsHeader struct {
 
 const (
 	MASK_SUBDIRECTORY = 1 << 31
-	TYPE_MANIFEST     = 24
+
+	RT_ICON       = 3
+	RT_GROUP_ICON = 3 + 11
+	RT_MANIFEST   = 24
 )
 
 var (
@@ -197,7 +204,7 @@ func run(fnamein, fnameout string) error {
 		NumberOfIdEntries: 1,
 	})
 	w.WriteLE(ImageResourceDirectoryEntry{
-		NameOrId:     TYPE_MANIFEST,
+		NameOrId:     RT_MANIFEST,
 		OffsetToData: MASK_SUBDIRECTORY | (w.Offset + uint32(binary.Size(ImageResourceDirectoryEntry{})) - diroff),
 	})
 	w.WriteLE(ImageResourceDirectory{
