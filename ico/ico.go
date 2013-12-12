@@ -5,8 +5,11 @@ package ico
 // BMP/DIB: http://msdn.microsoft.com/en-us/library/windows/desktop/dd183562%28v=vs.85%29.aspx
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
+	"image"
+	"image/color"
 	"io"
 	"io/ioutil"
 	"sort"
@@ -81,7 +84,9 @@ func (o byOffsets) Swap(i, j int) {
 	o[j] = tmp
 }
 
-type ICO struct{}
+type ICO struct {
+	image.Image
+}
 
 // NOTE: won't succeed on files with overlapping offsets
 func DecodeAll(r io.Reader) ([]*ICO, error) {
@@ -128,7 +133,7 @@ func DecodeAll(r io.Reader) ([]*ICO, error) {
 
 	icos := make([]*ICO, len(raws))
 	for i := 0; i < len(raws); i++ {
-		icos[raws[i].idx], err = decode(raws[i].bmpinfo, raws[i].data)
+		icos[raws[i].idx], err = decode(raws[i].bmpinfo, &raws[i].icoinfo, raws[i].data)
 		if err != nil {
 			return nil, err
 		}
@@ -136,18 +141,38 @@ func DecodeAll(r io.Reader) ([]*ICO, error) {
 	return icos, nil
 }
 
-func decode(info *BITMAPINFOHEADER, data []byte) (*ICO, error) {
+func decode(info *BITMAPINFOHEADER, icoinfo *ICONDIRENTRY, data []byte) (*ICO, error) {
+	if info.Compression != BI_RGB {
+		return nil, fmt.Errorf("ICO compression not supported (got %d)", info.Compression)
+	}
+
+	r := bytes.NewBuffer(data)
+
 	bottomup := info.Height > 0
 	if !bottomup {
 		info.Height = -info.Height
 	}
 
-	if info.Compression != BI_RGB {
-		return nil, fmt.Errorf("ICO compression not supported (got %d)", info.Compression)
-	}
-
 	switch info.BitCount {
+	case 8:
+		ncol := int(icoinfo.ColorCount)
+		if ncol == 0 {
+			ncol = 256
+		}
+
+		pal := make(color.Palette, ncol)
+		for i := 0; i < ncol; i++ {
+			var rgb RGBQUAD
+			err := binary.Read(r, binary.LittleEndian, &rgb)
+			if err != nil {
+				return nil, err
+			}
+			pal[i] = color.NRGBA{R: rgb.Red, G: rgb.Green, B: rgb.Blue, A: 0xff} //FIXME: is Alpha ok 0xff?
+		}
+
 	default:
 		return nil, fmt.Errorf("unsupported ICO bit depth (BitCount) %d", info.BitCount)
 	}
+
+	return nil, nil
 }

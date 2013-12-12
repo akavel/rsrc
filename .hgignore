@@ -1,3 +1,4 @@
 glob:*.res
 glob:*.exe
 
+glob:tmp

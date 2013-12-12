@@ -12,6 +12,8 @@ import (
 	"io"
 	"os"
 	"reflect"
+
+	"github.com/akavel/rsrc/ico"
 )
 
 type ImageResourceDirectory struct {
@@ -131,9 +133,10 @@ func SizedOpen(filename string) (*SizedFile, error) {
 
 func main() {
 	//TODO: allow in options advanced specification of multiple resources, as a tree (json?)
-	var fnamein, fnameout string
+	var fnamein, fnameico, fnameout string
 	flags := flag.NewFlagSet("", flag.ContinueOnError)
 	flags.StringVar(&fnamein, "manifest", "", "path to a Windows manifest file to embed")
+	flags.StringVar(&fnameico, "ico", "", "UNSUPPORTED: path to ICO file to embed")
 	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
 	_ = flags.Parse(os.Args[1:])
 	if fnamein == "" {
@@ -146,19 +149,31 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := run(fnamein, fnameout)
+	err := run(fnamein, fnameico, fnameout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(fnamein, fnameout string) error {
+func run(fnamein, fnameico, fnameout string) error {
 	manifest, err := SizedOpen(fnamein)
 	if err != nil {
 		return fmt.Errorf("Error opening manifest file '%s': %s", fnamein, err)
 	}
 	defer manifest.Close()
+
+	if fnameico != "" {
+		tmpf, err := os.Open(fnameico)
+		if err != nil {
+			return err
+		}
+		defer tmpf.Close()
+		_, err = ico.DecodeAll(tmpf)
+		if err != nil {
+			return err
+		}
+	}
 
 	out, err := os.Create(fnameout)
 	if err != nil {
