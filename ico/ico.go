@@ -1,7 +1,8 @@
 // Package ico describes Windows ICO file format.
 package ico
 
-// http://msdn.microsoft.com/en-us/library/ms997538.aspx
+// ICO: http://msdn.microsoft.com/en-us/library/ms997538.aspx
+// BMP/DIB: http://msdn.microsoft.com/en-us/library/windows/desktop/dd183562%28v=vs.85%29.aspx
 
 import (
 	"encoding/binary"
@@ -9,6 +10,10 @@ import (
 	"io"
 	"io/ioutil"
 	"sort"
+)
+
+const (
+	BI_RGB = 0
 )
 
 type ICONDIR struct {
@@ -31,8 +36,8 @@ type ICONDIRENTRY struct {
 type BITMAPINFOHEADER struct {
 	Size          uint32
 	Width         int32
-	Height        int32 // NOTE: "represents the combined height of the XOR and AND masks. Remember to divide this number by two before using it to perform calculations for either of the XOR or AND masks."
-	Planes        uint16
+	Height        int32  // NOTE: "represents the combined height of the XOR and AND masks. Remember to divide this number by two before using it to perform calculations for either of the XOR or AND masks."
+	Planes        uint16 // [BMP/DIB]: "is always 1"
 	BitCount      uint16
 	Compression   uint32 // for ico = 0
 	SizeImage     uint32
@@ -121,5 +126,28 @@ func DecodeAll(r io.Reader) ([]*ICO, error) {
 		}
 	}
 
-	return nil, nil
+	icos := make([]*ICO, len(raws))
+	for i := 0; i < len(raws); i++ {
+		icos[raws[i].idx], err = decode(raws[i].bmpinfo, raws[i].data)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return icos, nil
+}
+
+func decode(info *BITMAPINFOHEADER, data []byte) (*ICO, error) {
+	bottomup := info.Height > 0
+	if !bottomup {
+		info.Height = -info.Height
+	}
+
+	if info.Compression != BI_RGB {
+		return nil, fmt.Errorf("ICO compression not supported (got %d)", info.Compression)
+	}
+
+	switch info.BitCount {
+	default:
+		return nil, fmt.Errorf("unsupported ICO bit depth (BitCount) %d", info.BitCount)
+	}
 }
