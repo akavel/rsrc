@@ -124,7 +124,11 @@ func DecodeAll(r io.Reader) ([]*ICO, error) {
 			return nil, err
 		}
 
-		raws[i].data = make([]byte, raws[i].icoinfo.BytesInRes-uint32(binary.Size(BITMAPINFOHEADER{})))
+		err = skip(r, int64(raws[i].bmpinfo.Size-uint32(binary.Size(BITMAPINFOHEADER{}))))
+		if err != nil {
+			return nil, err
+		}
+		raws[i].data = make([]byte, raws[i].icoinfo.BytesInRes-raws[i].bmpinfo.Size)
 		_, err = io.ReadFull(r, raws[i].data)
 		if err != nil {
 			return nil, err
