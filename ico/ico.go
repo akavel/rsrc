@@ -3,6 +3,14 @@ package ico
 
 // http://msdn.microsoft.com/en-us/library/ms997538.aspx
 
+import (
+	"encoding/binary"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"sort"
+)
+
 type ICONDIR struct {
 	Reserved uint16 // must be 0
 	Type     uint16 // Resource Type (1 for icons)
@@ -51,22 +59,24 @@ type icoOffset struct {
 	offset uint32
 }
 
-type icoOffsets []icoOffset
+type rawico struct {
+	icoinfo ICONDIRENTRY
+	bmpinfo *BITMAPINFOHEADER
+	idx     int
+	data    []byte
+}
 
-func (o icoOffsets) Len() int           { return len(o) }
-func (o icoOffsets) Less(i, j int) bool { return o[i].offset < o[j].offset }
-func (o icoOffsets) Swap(i, j int) {
+type byOffsets []rawico
+
+func (o byOffsets) Len() int           { return len(o) }
+func (o byOffsets) Less(i, j int) bool { return o[i].icoinfo.ImageOffset < o[j].icoinfo.ImageOffset }
+func (o byOffsets) Swap(i, j int) {
 	tmp := o[i]
 	o[i] = o[j]
 	o[j] = tmp
 }
 
-type rawico struct {
-	icoinfo ICONDIRENTRY
-	bmpinfo BITMAPINFOHEADER
-	idx     int
-	data    []byte
-}
+type ICO struct{}
 
 // NOTE: won't succeed on files with overlapping offsets
 func DecodeAll(r io.Reader) ([]*ICO, error) {
@@ -79,31 +89,37 @@ func DecodeAll(r io.Reader) ([]*ICO, error) {
 		return nil, fmt.Errorf("bad magic number")
 	}
 
-	entries := make([]ICONDIRENTRY, hdr.Count)
-	offsets := make([]icoOffset, hdr.Count)
-	for i := 0; i < len(entries); i++ {
-		err = binary.Read(r, binary.LittleEndian, &entries[i])
+	raws := make([]rawico, hdr.Count)
+	for i := 0; i < len(raws); i++ {
+		err = binary.Read(r, binary.LittleEndian, &raws[i].icoinfo)
 		if err != nil {
 			return nil, err
 		}
-		offsets[i] = icoOffset{i, entries[i].ImageOffset}
+		raws[i].idx = i
 	}
 
-	sort.Sort(icoOffsets(offsets))
+	sort.Sort(byOffsets(raws))
 
-	datas := make([][]byte, hdr.Count)
-	offset := binary.Size(&hdr) + len(entries)*binary.Size(ICONDIRENTRY{})
-	for i := 0; i < len(offsets); i++ {
-		err = skip(r, offsets[i].offset-offset)
+	offset := uint32(binary.Size(&hdr) + len(raws)*binary.Size(ICONDIRENTRY{}))
+	for i := 0; i < len(raws); i++ {
+		err = skip(r, int64(raws[i].icoinfo.ImageOffset-offset))
 		if err != nil {
 			return nil, err
 		}
-		offset = offsets[i].offset
+		offset = raws[i].icoinfo.ImageOffset
 
-		datas[i] = make([]byte, entries[offsets[i].n].BytesInRes)
-		_, err = io.ReadFull(r, datas[i])
+		raws[i].bmpinfo = &BITMAPINFOHEADER{}
+		err = binary.Read(r, binary.LittleEndian, raws[i].bmpinfo)
+		if err != nil {
+			return nil, err
+		}
+
+		raws[i].data = make([]byte, raws[i].icoinfo.BytesInRes-uint32(binary.Size(BITMAPINFOHEADER{})))
+		_, err = io.ReadFull(r, raws[i].data)
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	return nil, nil
 }
