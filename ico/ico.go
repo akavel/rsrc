@@ -25,14 +25,18 @@ type ICONDIR struct {
 	Count    uint16 // How many images?
 }
 
+type IconDirEntryCommon struct {
+	Width      byte   // Width, in pixels, of the image
+	Height     byte   // Height, in pixels, of the image
+	ColorCount byte   // Number of colors in image (0 if >=8bpp)
+	Reserved   byte   // Reserved (must be 0)
+	Planes     uint16 // Color Planes
+	BitCount   uint16 // Bits per pixel
+	BytesInRes uint32 // How many bytes in this resource?
+}
+
 type ICONDIRENTRY struct {
-	Width       byte   // Width, in pixels, of the image
-	Height      byte   // Height, in pixels, of the image
-	ColorCount  byte   // Number of colors in image (0 if >=8bpp)
-	Reserved    byte   // Reserved (must be 0)
-	Planes      uint16 // Color Planes
-	BitCount    uint16 // Bits per pixel
-	BytesInRes  uint32 // How many bytes in this resource?
+	IconDirEntryCommon
 	ImageOffset uint32 // Where in the file is this image? [from beginning of file]
 }
 
@@ -88,8 +92,28 @@ type ICO struct {
 	image.Image
 }
 
+func DecodeHeaders(r io.Reader) ([]ICONDIRENTRY, error) {
+	var hdr ICONDIR
+	err := binary.Read(r, binary.LittleEndian, &hdr)
+	if err != nil {
+		return nil, err
+	}
+	if hdr.Reserved != 0 || hdr.Type != 1 {
+		return nil, fmt.Errorf("bad magic number")
+	}
+
+	entries := make([]ICONDIRENTRY, hdr.Count)
+	for i := 0; i < len(entries); i++ {
+		err = binary.Read(r, binary.LittleEndian, &entries[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return entries, nil
+}
+
 // NOTE: won't succeed on files with overlapping offsets
-func DecodeAll(r io.Reader) ([]*ICO, error) {
+func unused_decodeAll(r io.Reader) ([]*ICO, error) {
 	var hdr ICONDIR
 	err := binary.Read(r, binary.LittleEndian, &hdr)
 	if err != nil {
@@ -137,6 +161,7 @@ func DecodeAll(r io.Reader) ([]*ICO, error) {
 
 	icos := make([]*ICO, len(raws))
 	for i := 0; i < len(raws); i++ {
+		fmt.Println(i)
 		icos[raws[i].idx], err = decode(raws[i].bmpinfo, &raws[i].icoinfo, raws[i].data)
 		if err != nil {
 			return nil, err
@@ -149,6 +174,10 @@ func decode(info *BITMAPINFOHEADER, icoinfo *ICONDIRENTRY, data []byte) (*ICO, e
 	if info.Compression != BI_RGB {
 		return nil, fmt.Errorf("ICO compression not supported (got %d)", info.Compression)
 	}
+
+	//if info.ClrUsed!=0 {
+	//	panic(info.ClrUsed)
+	//}
 
 	r := bytes.NewBuffer(data)
 
@@ -173,6 +202,9 @@ func decode(info *BITMAPINFOHEADER, icoinfo *ICONDIRENTRY, data []byte) (*ICO, e
 			}
 			pal[i] = color.NRGBA{R: rgb.Red, G: rgb.Green, B: rgb.Blue, A: 0xff} //FIXME: is Alpha ok 0xff?
 		}
+		fmt.Println(pal)
+
+		fmt.Println(info.SizeImage, len(data)-binary.Size(RGBQUAD{})*len(pal), info.Width, info.Height)
 
 	default:
 		return nil, fmt.Errorf("unsupported ICO bit depth (BitCount) %d", info.BitCount)

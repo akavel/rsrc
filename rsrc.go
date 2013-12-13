@@ -169,7 +169,7 @@ func run(fnamein, fnameico, fnameout string) error {
 			return err
 		}
 		defer tmpf.Close()
-		_, err = ico.DecodeAll(tmpf)
+		_, err = ico.DecodeHeaders(tmpf)
 		if err != nil {
 			return err
 		}
