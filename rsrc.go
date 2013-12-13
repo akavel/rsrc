@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"reflect"
 
@@ -74,61 +73,6 @@ func MustGetFieldOffset(t reflect.Type, field string) uintptr {
 		panic("field " + field + " not found")
 	}
 	return f.Offset
-}
-
-type Writer struct {
-	W      io.Writer
-	Offset uint32 //FIXME: int64?
-	Err    error
-}
-
-func (w *Writer) WriteLE(v interface{}) {
-	if w.Err != nil {
-		return
-	}
-	w.Err = binary.Write(w.W, binary.LittleEndian, v)
-	if w.Err != nil {
-		return
-	}
-	w.Offset += uint32(reflect.TypeOf(v).Size())
-}
-
-type SizedReader interface {
-	io.Reader
-	Size() int64
-}
-
-func (w *Writer) WriteFromSized(r SizedReader) {
-	if w.Err != nil {
-		return
-	}
-	var n int64
-	n, w.Err = io.CopyN(w.W, r, r.Size())
-	w.Offset += uint32(n)
-}
-
-type SizedFile struct {
-	f *os.File
-	s *io.SectionReader // helper, for Size()
-}
-
-func (r *SizedFile) Read(p []byte) (n int, err error) { return r.s.Read(p) }
-func (r *SizedFile) Size() int64                      { return r.s.Size() }
-func (r *SizedFile) Close() error                     { return r.f.Close() }
-
-func SizedOpen(filename string) (*SizedFile, error) {
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	info, err := f.Stat()
-	if err != nil {
-		return nil, err
-	}
-	return &SizedFile{
-		f: f,
-		s: io.NewSectionReader(f, 0, info.Size()),
-	}, nil
 }
 
 func main() {
