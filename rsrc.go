@@ -183,28 +183,33 @@ func run(fnamein, fnameico, fnameout string) error {
 				NumberOfIdEntries: 1,
 			},
 			ImageResourceDirectoryEntry{
-				NameOrId:     RT_MANIFEST,
-				OffsetToData: MASK_SUBDIRECTORY | (w.Offset + uint32(binary.Size(ImageResourceDirectoryEntry{})) - diroff),
+				NameOrId: RT_MANIFEST,
+				OffsetToData: MASK_SUBDIRECTORY | (rawdataoff - diroff +
+					uint32(binary.Size(ImageResourceDirectory{})+binary.Size(ImageResourceDirectoryEntry{}))),
 			},
 			ImageResourceDirectory{
 				NumberOfIdEntries: 1,
 			},
 			ImageResourceDirectoryEntry{
-				NameOrId:     1, // ID
-				OffsetToData: MASK_SUBDIRECTORY | (w.Offset + uint32(binary.Size(ImageResourceDirectoryEntry{})) - diroff),
+				NameOrId: 1, // ID
+				OffsetToData: MASK_SUBDIRECTORY | (rawdataoff - diroff +
+					2*uint32(binary.Size(ImageResourceDirectory{})+binary.Size(ImageResourceDirectoryEntry{}))),
 			},
 			ImageResourceDirectory{
 				NumberOfIdEntries: 1,
 			},
 			ImageResourceDirectoryEntry{
-				NameOrId:     0x0409, //FIXME: language; what value should be here?
-				OffsetToData: w.Offset + uint32(binary.Size(ImageResourceDirectoryEntry{})) - diroff,
+				NameOrId: 0x0409, //FIXME: language; what value should be here?
+				OffsetToData: rawdataoff - diroff +
+					3*uint32(binary.Size(ImageResourceDirectory{})+binary.Size(ImageResourceDirectoryEntry{})),
 			},
 
 			ImageResourceDataEntry{
-				OffsetToData: w.Offset + uint32(binary.Size(ImageResourceDataEntry{})) - diroff,
-				Size1:        uint32(manifest.Size()),
-				CodePage:     0, //FIXME: what value here? for now just tried 0
+				OffsetToData: rawdataoff - diroff +
+					3*uint32(binary.Size(ImageResourceDirectory{})+binary.Size(ImageResourceDirectoryEntry{})) +
+					uint32(binary.Size(ImageResourceDataEntry{})),
+				Size1:    uint32(manifest.Size()),
+				CodePage: 0, //FIXME: what value here? for now just tried 0
 			},
 
 			manifest,
