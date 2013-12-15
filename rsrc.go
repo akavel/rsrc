@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"reflect"
 
 	"github.com/akavel/rsrc/ico"
@@ -101,12 +102,6 @@ func main() {
 	}
 }
 
-//type Directory struct {
-//	Info ImageResourceDirectory
-//	Entries []ImageResourceDirectoryEntry
-//	Data []interface{}
-//}
-
 type Coff struct {
 	pe.FileHeader
 	pe.SectionHeader32
@@ -144,70 +139,43 @@ func run(fnamein, fnameico, fnameout string) error {
 	defer out.Close()
 	w := Writer{W: out}
 
-	// precalculate some important offsets in resulting file, that we must know earlier
-	//TODO: try to simplify by adding fake section at beginning, containing strings table in data, and characteristics saying "drop me when linking"
-	rawdataoff := uint32(binary.Size(pe.FileHeader{}) + binary.Size(pe.SectionHeader32{}))
-	hierarchylen := uint32(3*binary.Size(ImageResourceDirectory{}) +
-		3*binary.Size(ImageResourceDirectoryEntry{}))
-	rawdatalen := hierarchylen +
-		uint32(1*binary.Size(ImageResourceDataEntry{})) +
-		uint32(manifest.Size())
-	diroff := rawdataoff
-	relocoff := rawdataoff + rawdatalen
-	relocp := hierarchylen + uint32(MustGetFieldOffset(reflect.TypeOf(ImageResourceDataEntry{}), "OffsetToData"))
-	reloclen := uint32(binary.Size(RelocationEntry{}))
-	symoff := relocoff + reloclen
-
 	coff := Coff{
 		pe.FileHeader{
 			Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
 			NumberOfSections:     1,      // .rsrc
 			TimeDateStamp:        0,      // was also 0 in sample data from MinGW's windres.exe
-			PointerToSymbolTable: uint32(symoff),
 			NumberOfSymbols:      1,
 			SizeOfOptionalHeader: 0,
 			Characteristics:      0x0104, //FIXME: copied from windres.exe output, find out what should be here and why
 		},
 		pe.SectionHeader32{
-			Name:                 STRING_RSRC,
-			SizeOfRawData:        rawdatalen,
-			PointerToRawData:     rawdataoff,
-			PointerToRelocations: relocoff,
-			NumberOfRelocations:  1,
-			Characteristics:      0x40000040, // "INITIALIZED_DATA MEM_READ" ?
+			Name:                STRING_RSRC,
+			NumberOfRelocations: 1,
+			Characteristics:     0x40000040, // "INITIALIZED_DATA MEM_READ" ?
 		},
 
 		// now, build "directory hierarchy" of .rsrc section: first type, then id/name, then language
 		[]interface{}{
-			ImageResourceDirectory{
+			&ImageResourceDirectory{
 				NumberOfIdEntries: 1,
 			},
-			ImageResourceDirectoryEntry{
+			&ImageResourceDirectoryEntry{
 				NameOrId: RT_MANIFEST,
-				OffsetToData: MASK_SUBDIRECTORY | (rawdataoff - diroff +
-					uint32(binary.Size(ImageResourceDirectory{})+binary.Size(ImageResourceDirectoryEntry{}))),
 			},
-			ImageResourceDirectory{
+			&ImageResourceDirectory{
 				NumberOfIdEntries: 1,
 			},
-			ImageResourceDirectoryEntry{
+			&ImageResourceDirectoryEntry{
 				NameOrId: 1, // ID
-				OffsetToData: MASK_SUBDIRECTORY | (rawdataoff - diroff +
-					2*uint32(binary.Size(ImageResourceDirectory{})+binary.Size(ImageResourceDirectoryEntry{}))),
 			},
-			ImageResourceDirectory{
+			&ImageResourceDirectory{
 				NumberOfIdEntries: 1,
 			},
-			ImageResourceDirectoryEntry{
+			&ImageResourceDirectoryEntry{
 				NameOrId: 0x0409, //FIXME: language; what value should be here?
-				OffsetToData: rawdataoff - diroff +
-					3*uint32(binary.Size(ImageResourceDirectory{})+binary.Size(ImageResourceDirectoryEntry{})),
 			},
 
-			ImageResourceDataEntry{
-				OffsetToData: rawdataoff - diroff +
-					3*uint32(binary.Size(ImageResourceDirectory{})+binary.Size(ImageResourceDirectoryEntry{})) +
-					uint32(binary.Size(ImageResourceDataEntry{})),
+			&ImageResourceDataEntry{
 				Size1:    uint32(manifest.Size()),
 				CodePage: 0, //FIXME: what value here? for now just tried 0
 			},
@@ -216,9 +184,8 @@ func run(fnamein, fnameico, fnameout string) error {
 		},
 
 		[]RelocationEntry{RelocationEntry{
-			RVA:         relocp, // FIXME: IIUC, this resolves to value contained in ImageResourceDataEntry.OffsetToData
-			SymbolIndex: 0,      // "(zero based) index in the Symbol table to which the reference refers. Once you have loaded the COFF file into memory and know where each symbol is, you find the new updated address for the given symbol and update the reference accordingly."
-			Type:        7,      // according to ldpe.c, this decodes to: IMAGE_REL_I386_DIR32NB
+			SymbolIndex: 0, // "(zero based) index in the Symbol table to which the reference refers. Once you have loaded the COFF file into memory and know where each symbol is, you find the new updated address for the given symbol and update the reference accordingly."
+			Type:        7, // according to ldpe.c, this decodes to: IMAGE_REL_I386_DIR32NB
 		}},
 
 		[]Symbol{Symbol{
@@ -234,9 +201,45 @@ func run(fnamein, fnameico, fnameout string) error {
 			Length: uint32(binary.Size(StringsHeader{})), // empty strings table -- but we must still show size of the table's header...
 		},
 	}
-	_ = coff
 
-	Walk(coff, func(v reflect.Value) error {
+	// fill in some important offsets in resulting file
+	var offset, diroff uint32
+	Walk(coff, func(v reflect.Value, path string) error {
+		switch path {
+		case "/Data":
+			coff.SectionHeader32.PointerToRawData = offset
+			diroff = offset
+		case "/Data[2]":
+			coff.Data[1].(*ImageResourceDirectoryEntry).OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
+		case "/Data[4]":
+			coff.Data[3].(*ImageResourceDirectoryEntry).OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
+		case "/Data[6]":
+			coff.Data[5].(*ImageResourceDirectoryEntry).OffsetToData = offset - diroff
+		case "/Data[6]/OffsetToData":
+			coff.Relocations[0].RVA = offset - diroff
+		case "/Data[7]":
+			coff.Data[6].(*ImageResourceDataEntry).OffsetToData = offset - diroff
+		case "/Relocations":
+			coff.SectionHeader32.PointerToRelocations = offset
+			coff.SectionHeader32.SizeOfRawData = offset - diroff
+		case "/Symbols":
+			coff.FileHeader.PointerToSymbolTable = offset
+		}
+
+		if Plain(v.Kind()) {
+			offset += uint32(binary.Size(v.Interface())) // TODO: change to v.Type().Size() ?
+			return nil
+		}
+		vv, ok := v.Interface().(SizedReader)
+		if ok {
+			offset += uint32(vv.Size())
+			return WALK_SKIP
+		}
+		return nil
+	})
+
+	// write the resulting file to disk
+	Walk(coff, func(v reflect.Value, path string) error {
 		if Plain(v.Kind()) {
 			w.WriteLE(v.Interface())
 			return nil
@@ -250,7 +253,7 @@ func run(fnamein, fnameico, fnameout string) error {
 	})
 
 	if w.Err != nil {
-		return fmt.Errorf("Error writing .rsrc Symbol Table & Strings: %s", w.Err)
+		return fmt.Errorf("Error writing output file: %s", w.Err)
 	}
 
 	return nil
@@ -260,10 +263,10 @@ var (
 	WALK_SKIP = errors.New("")
 )
 
-type Walker func(reflect.Value) error
+type Walker func(v reflect.Value, path string) error
 
 func Walk(value interface{}, walker Walker) error {
-	err := walk(reflect.ValueOf(value), walker)
+	err := walk(reflect.ValueOf(value), "/", walker)
 	if err == WALK_SKIP {
 		err = nil
 	}
@@ -274,21 +277,22 @@ func stopping(err error) bool {
 	return err != nil && err != WALK_SKIP
 }
 
-func walk(v reflect.Value, walker Walker) error {
-	err := walker(v)
+func walk(v reflect.Value, spath string, walker Walker) error {
+	err := walker(v, spath)
 	if err != nil {
 		return err
 	}
+	v = reflect.Indirect(v)
 	switch v.Type().Kind() {
 	case reflect.Slice, reflect.Array:
 		for i := 0; i < v.Len(); i++ {
-			err = walk(v.Index(i), walker)
+			err = walk(v.Index(i), spath+fmt.Sprintf("[%d]", i), walker)
 			if stopping(err) {
 				return err
 			}
 		}
 	case reflect.Interface:
-		err = walk(v.Elem(), walker)
+		err = walk(v.Elem(), spath, walker)
 		if stopping(err) {
 			return err
 		}
@@ -297,14 +301,13 @@ func walk(v reflect.Value, walker Walker) error {
 		for i := 0; i < v.NumField(); i++ {
 			//f := t.Field(i) //TODO: handle unexported fields
 			vv := v.Field(i)
-			err = walk(vv, walker)
+			err = walk(vv, path.Join(spath, v.Type().Field(i).Name), walker)
 			if stopping(err) {
 				return err
 			}
 		}
 	default:
 		// FIXME: handle other special cases too
-		// Ptr
 		// String
 		return nil
 	}
