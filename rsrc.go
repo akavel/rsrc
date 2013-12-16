@@ -127,6 +127,44 @@ type Coff struct {
 	StringsHeader
 }
 
+func NewRSRC() *Coff {
+	return &Coff{
+		pe.FileHeader{
+			Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
+			NumberOfSections:     1,      // .rsrc
+			TimeDateStamp:        0,      // was also 0 in sample data from MinGW's windres.exe
+			NumberOfSymbols:      1,
+			SizeOfOptionalHeader: 0,
+			Characteristics:      0x0104, //FIXME: copied from windres.exe output, find out what should be here and why
+		},
+		pe.SectionHeader32{
+			Name:            STRING_RSRC,
+			Characteristics: 0x40000040, // "INITIALIZED_DATA MEM_READ" ?
+		},
+
+		// "directory hierarchy" of .rsrc section: top level goes resource type, then id/name, then language
+		Dir{},
+
+		[]DataEntry{},
+		[]interface{}{},
+
+		[]RelocationEntry{},
+
+		[]Symbol{Symbol{
+			Name:           STRING_RSRC,
+			Value:          0,
+			SectionNumber:  1,
+			Type:           0, // FIXME: wtf?
+			StorageClass:   3, // FIXME: is it ok? and uint8? and what does the value mean?
+			AuxiliaryCount: 0, // FIXME: wtf?
+		}},
+
+		StringsHeader{
+			Length: uint32(binary.Size(StringsHeader{})), // empty strings table -- but we must still show size of the table's header...
+		},
+	}
+}
+
 //NOTE: function assumes that 'id' is increasing on each entry
 func (coff *Coff) AddResource(kind uint32, id uint16, data interface{}, size uint32) {
 	//FIXME: find correct place to insert on all levels, then find index in Data
@@ -258,41 +296,7 @@ func run(fnamein, fnameico, fnameout string) error {
 	defer out.Close()
 	w := Writer{W: out}
 
-	coff := Coff{
-		pe.FileHeader{
-			Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
-			NumberOfSections:     1,      // .rsrc
-			TimeDateStamp:        0,      // was also 0 in sample data from MinGW's windres.exe
-			NumberOfSymbols:      1,
-			SizeOfOptionalHeader: 0,
-			Characteristics:      0x0104, //FIXME: copied from windres.exe output, find out what should be here and why
-		},
-		pe.SectionHeader32{
-			Name:            STRING_RSRC,
-			Characteristics: 0x40000040, // "INITIALIZED_DATA MEM_READ" ?
-		},
-
-		// "directory hierarchy" of .rsrc section: top level goes resource type, then id/name, then language
-		Dir{},
-
-		[]DataEntry{},
-		[]interface{}{},
-
-		[]RelocationEntry{},
-
-		[]Symbol{Symbol{
-			Name:           STRING_RSRC,
-			Value:          0,
-			SectionNumber:  1,
-			Type:           0, // FIXME: wtf?
-			StorageClass:   3, // FIXME: is it ok? and uint8? and what does the value mean?
-			AuxiliaryCount: 0, // FIXME: wtf?
-		}},
-
-		StringsHeader{
-			Length: uint32(binary.Size(StringsHeader{})), // empty strings table -- but we must still show size of the table's header...
-		},
-	}
+	coff := NewRSRC()
 
 	coff.AddResource(RT_MANIFEST, <-newid, manifest, uint32(manifest.Size()))
 
