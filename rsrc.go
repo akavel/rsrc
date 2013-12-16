@@ -217,6 +217,7 @@ func run(fnamein, fnameico, fnameout string) error {
 
 	if len(icons) > 0 {
 		//FIXME: add corresponding DataEntries
+		//FIXME: add relocations
 		/*
 			coff.Dir.NumberOfIdEntries+=2
 
@@ -271,7 +272,7 @@ func run(fnamein, fnameico, fnameout string) error {
 	dir_n := regexp.MustCompile("^/Dir/Dirs" + N + "$")
 	dir_n_n := regexp.MustCompile("^/Dir/Dirs" + N + "/Dirs" + N + "$")
 	dataentry_n := regexp.MustCompile("^/DataEntries" + N + "$")
-	//dataentry_n_off := regexp.MustCompile("^/DataEntries" + N + "/OffsetToData$")
+	dataentry_n_off := regexp.MustCompile("^/DataEntries" + N + "/OffsetToData$")
 	//data_n := regexp.MustCompile("^/Data" + N + "$")
 
 	// fill in some important offsets in resulting file
@@ -288,8 +289,8 @@ func run(fnamein, fnameico, fnameout string) error {
 		//case "/DataEntries[0]":
 		//	direntry := <-leafwalker
 		//	direntry.OffsetToData = offset - diroff
-		case "/DataEntries[0]/OffsetToData":
-			coff.Relocations[0].RVA = offset - diroff
+		//case "/DataEntries[0]/OffsetToData":
+		//	coff.Relocations[0].RVA = offset - diroff
 		case "/Data[0]":
 			coff.DataEntries[0].OffsetToData = offset - diroff
 		case "/Relocations":
@@ -307,6 +308,8 @@ func run(fnamein, fnameico, fnameout string) error {
 		case m.Find(path, dataentry_n):
 			direntry := <-leafwalker
 			direntry.OffsetToData = offset - diroff
+		case m.Find(path, dataentry_n_off):
+			coff.Relocations[m[0]].RVA = offset - diroff
 		}
 
 		if Plain(v.Kind()) {
