@@ -70,14 +70,17 @@ const (
 
 var (
 	STRING_RSRC = [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0}
+	LANG_ENTRY  = DirEntries{{NameOrId: 0x0409}} //FIXME: language; what value should be here?
 )
 
-func MustGetFieldOffset(t reflect.Type, field string) uintptr {
-	f, ok := t.FieldByName(field)
-	if !ok {
-		panic("field " + field + " not found")
-	}
-	return f.Offset
+type GRPICONDIR struct {
+	ico.ICONDIR
+	Entries []GRPICONDIRENTRY
+}
+
+type GRPICONDIRENTRY struct {
+	ico.IconDirEntryCommon
+	Id uint16
 }
 
 func main() {
@@ -125,17 +128,26 @@ func run(fnamein, fnameico, fnameout string) error {
 	}
 	defer manifest.Close()
 
+	var icons []ico.ICONDIRENTRY
+	var iconsf *os.File
 	if fnameico != "" {
-		tmpf, err := os.Open(fnameico)
+		iconsf, err = os.Open(fnameico)
 		if err != nil {
 			return err
 		}
-		defer tmpf.Close()
-		_, err = ico.DecodeHeaders(tmpf)
+		defer iconsf.Close()
+		icons, err = ico.DecodeHeaders(iconsf)
 		if err != nil {
 			return err
 		}
 	}
+
+	newid := make(chan uint16)
+	go func() {
+		for i := uint16(1); ; i++ {
+			newid <- i
+		}
+	}()
 
 	out, err := os.Create(fnameout)
 	if err != nil {
@@ -163,18 +175,14 @@ func run(fnamein, fnameico, fnameout string) error {
 		Dir{
 			NumberOfIdEntries: 1,
 			DirEntries:        DirEntries{{NameOrId: RT_MANIFEST}},
-			Dirs: Dirs{
-				Dir{
+			Dirs: Dirs{{
+				NumberOfIdEntries: 1,
+				DirEntries:        DirEntries{{NameOrId: uint32(<-newid)}}, // resource ID
+				Dirs: Dirs{{
 					NumberOfIdEntries: 1,
-					DirEntries:        DirEntries{{NameOrId: 1}}, // resource ID
-					Dirs: Dirs{
-						Dir{
-							NumberOfIdEntries: 1,
-							DirEntries:        DirEntries{{NameOrId: 0x0409}}, //FIXME: language; what value should be here?
-						},
-					},
-				},
-			},
+					DirEntries:        LANG_ENTRY,
+				}},
+			}},
 		},
 		[]DataEntry{
 			DataEntry{
@@ -203,6 +211,46 @@ func run(fnamein, fnameico, fnameout string) error {
 		StringsHeader{
 			Length: uint32(binary.Size(StringsHeader{})), // empty strings table -- but we must still show size of the table's header...
 		},
+	}
+
+	if len(icons) > 0 {
+		/*
+			coff.Dir.NumberOfIdEntries+=2
+
+			coff.Dir.DirEntries = append(coff.Dir.DirEntries, DirEntry{NameOrId: RT_ICON})
+			coff.Dir.Dirs = append(coff.Dir.Dirs, Dir{
+				NumberOfIdEntries: len(icons),
+			})
+			dir := &coff.Dir.Dirs[len(coff.Dir.Dirs)-1]
+			group := GRPICONDIR{
+				Reserved: 0, // magic num.
+				Type: 1, // magic num.
+				Count: len(icons),
+			}
+			for i, icon := range icons {
+				id := <-newid
+
+				group.Entries = append(group.Entries, GRPICONDIRENTRY{icon, id})
+				dir.DirEntries = append(dir.DirEntries, DirEntry{NameOrId: uint32(id)})
+				dir.Dirs = append(dir.Dirs, Dir{
+					NumberOfIdEntries: 1,
+					DirEntries: LANG_ENTRY,
+				})
+
+				coff.Data = append(coff.Data, io.NewSectionReader(iconsf, icon.ImageOffset, icon.BytesInRes))
+			}
+
+			coff.Dir.DirEntries = append(coff.Dir.DirEntries, DirEntry{NameOrId: RT_GROUP_ICON})
+			coff.Dir.Dirs = append(coff.Dir.Dirs, Dir{
+				NumberOfIdEntries: 1,
+				DirEntries: DirEntries{{NameOrId: uint32(<-newid)}},
+				Dirs: Dirs{{
+					NumberOfIdEntries: 1,
+					DirEntries: LANG_ENTRY,
+				}},
+			})
+			coff.Data = append(coff.Data, group)
+		*/
 	}
 
 	// fill in some important offsets in resulting file
