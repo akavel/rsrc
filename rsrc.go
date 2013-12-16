@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"unsafe"
 
 	"github.com/akavel/rsrc/ico"
 )
@@ -75,7 +76,7 @@ const (
 var (
 	STRING_RSRC = [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0}
 
-	LANG_ENTRY  = DirEntries{{NameOrId: 0x0409}} //FIXME: language; what value should be here?
+	LANG_ENTRY  = DirEntry{NameOrId: 0x0409} //FIXME: language; what value should be here?
 	RELOC_ENTRY = RelocationEntry{
 		SymbolIndex: 0, // "(zero based) index in the Symbol table to which the reference refers. Once you have loaded the COFF file into memory and know where each symbol is, you find the new updated address for the given symbol and update the reference accordingly."
 		Type:        7, // according to ldpe.c, this decodes to: IMAGE_REL_I386_DIR32NB
@@ -157,7 +158,7 @@ func (coff *Coff) AddResource(kind uint32, id uint16, data interface{}, size uin
 	dirs0[i0].DirEntries = append(dirs0[i0].DirEntries, DirEntry{NameOrId: uint32(id)})
 	dirs0[i0].Dirs = append(dirs0[i0].Dirs, Dir{
 		NumberOfIdEntries: 1,
-		DirEntries:        LANG_ENTRY,
+		DirEntries:        DirEntries{LANG_ENTRY},
 	})
 	dirs0[i0].NumberOfIdEntries++
 
@@ -299,6 +300,7 @@ func run(fnamein, fnameico, fnameout string) error {
 		case m.Find(path, RE("^/DataEntries"+N+"$")):
 			direntry := <-leafwalker
 			direntry.OffsetToData = offset - diroff
+			fmt.Println("N", m[0], "direntry", unsafe.Pointer(direntry), "OffsetToData", direntry.OffsetToData, "offset", offset)
 		case m.Find(path, RE("^/DataEntries"+N+"/OffsetToData$")):
 			coff.Relocations[m[0]].RVA = offset - diroff
 		case m.Find(path, RE("^/Data"+N+"$")):
