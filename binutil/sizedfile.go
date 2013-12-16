@@ -1,4 +1,4 @@
-package main
+package binutil
 
 import (
 	"io"

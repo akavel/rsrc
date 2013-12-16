@@ -253,7 +253,7 @@ func (coff *Coff) Freeze() {
 			offset += uint32(binary.Size(v.Interface())) // TODO: change to v.Type().Size() ?
 			return nil
 		}
-		vv, ok := v.Interface().(SizedReader)
+		vv, ok := v.Interface().(binutil.SizedReader)
 		if ok {
 			offset += uint32(vv.Size())
 			return binutil.WALK_SKIP
@@ -263,7 +263,7 @@ func (coff *Coff) Freeze() {
 }
 
 func run(fnamein, fnameico, fnameout string) error {
-	manifest, err := SizedOpen(fnamein)
+	manifest, err := binutil.SizedOpen(fnamein)
 	if err != nil {
 		return fmt.Errorf("Error opening manifest file '%s': %s", fnamein, err)
 	}
@@ -295,7 +295,7 @@ func run(fnamein, fnameico, fnameout string) error {
 		return err
 	}
 	defer out.Close()
-	w := Writer{W: out}
+	w := binutil.Writer{W: out}
 
 	coff := NewRSRC()
 
@@ -328,7 +328,7 @@ func run(fnamein, fnameico, fnameout string) error {
 			w.WriteLE(v.Interface())
 			return nil
 		}
-		vv, ok := v.Interface().(SizedReader)
+		vv, ok := v.Interface().(binutil.SizedReader)
 		if ok {
 			w.WriteFromSized(vv)
 			return binutil.WALK_SKIP
