@@ -39,11 +39,11 @@ func main() {
 	var fnamein, fnameico, fnameout string
 	flags := flag.NewFlagSet("", flag.ContinueOnError)
 	flags.StringVar(&fnamein, "manifest", "", "path to a Windows manifest file to embed")
-	flags.StringVar(&fnameico, "ico", "", "path to ICO file to embed")
+	flags.StringVar(&fnameico, "ico", "", "path to .ico file to embed")
 	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
 	_ = flags.Parse(os.Args[1:])
 	if fnamein == "" {
-		fmt.Fprintf(os.Stderr, "USAGE: %s -manifest FILE.exe.manifest [-o FILE.syso]\n"+
+		fmt.Fprintf(os.Stderr, "USAGE: %s -manifest FILE.exe.manifest [-ico FILE.ico] [-o FILE.syso]\n"+
 			"Generates a .syso file with specified resources embedded in .rsrc section,\n"+
 			"aimed for consumption by Go linker when building Win32 excecutables.\n"+
 			"OPTIONS:\n",
