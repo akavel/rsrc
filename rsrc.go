@@ -252,6 +252,7 @@ func run(fnamein, fnameico, fnameout string) error {
 			r := io.NewSectionReader(iconsf, int64(icon.ImageOffset), int64(icon.BytesInRes))
 			coff.DataEntries = append(coff.DataEntries, DataEntry{Size1: uint32(r.Size())})
 			coff.Relocations = append(coff.Relocations, RELOC_ENTRY)
+			coff.SectionHeader32.NumberOfRelocations++
 			coff.Data = append(coff.Data, r)
 
 			group.Entries = append(group.Entries, GRPICONDIRENTRY{icon.IconDirEntryCommon, id})
@@ -269,6 +270,7 @@ func run(fnamein, fnameico, fnameout string) error {
 			Size1: uint32(binary.Size(group.ICONDIR) + len(icons)*binary.Size(group.Entries[0])),
 		})
 		coff.Relocations = append(coff.Relocations, RELOC_ENTRY)
+		coff.SectionHeader32.NumberOfRelocations++
 		coff.Data = append(coff.Data, group)
 
 	}
