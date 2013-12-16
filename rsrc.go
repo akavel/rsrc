@@ -73,6 +73,8 @@ const (
 var (
 	STRING_RSRC = [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0}
 	LANG_ENTRY  = DirEntries{{NameOrId: 0x0409}} //FIXME: language; what value should be here?
+
+	RE = regexp.MustCompile
 )
 
 type GRPICONDIR struct {
@@ -268,13 +270,6 @@ func run(fnamein, fnameico, fnameout string) error {
 		}
 	}()
 
-	N := `\[(\d+)\]`
-	dir_n := regexp.MustCompile("^/Dir/Dirs" + N + "$")
-	dir_n_n := regexp.MustCompile("^/Dir/Dirs" + N + "/Dirs" + N + "$")
-	dataentry_n := regexp.MustCompile("^/DataEntries" + N + "$")
-	dataentry_n_off := regexp.MustCompile("^/DataEntries" + N + "/OffsetToData$")
-	data_n := regexp.MustCompile("^/Data" + N + "$")
-
 	// fill in some important offsets in resulting file
 	var offset, diroff uint32
 	Walk(coff, func(v reflect.Value, path string) error {
@@ -282,35 +277,25 @@ func run(fnamein, fnameico, fnameout string) error {
 		case "/Dir":
 			coff.SectionHeader32.PointerToRawData = offset
 			diroff = offset
-		//case "/Dir/Dirs[0]":
-		//	coff.Dir.DirEntries[0].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
-		//case "/Dir/Dirs[0]/Dirs[0]":
-		//	coff.Dir.Dirs[0].DirEntries[0].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
-		//case "/DataEntries[0]":
-		//	direntry := <-leafwalker
-		//	direntry.OffsetToData = offset - diroff
-		//case "/DataEntries[0]/OffsetToData":
-		//	coff.Relocations[0].RVA = offset - diroff
-		//case "/Data[0]":
-		//	coff.DataEntries[0].OffsetToData = offset - diroff
 		case "/Relocations":
 			coff.SectionHeader32.PointerToRelocations = offset
 			coff.SectionHeader32.SizeOfRawData = offset - diroff
 		case "/Symbols":
 			coff.FileHeader.PointerToSymbolTable = offset
 		}
+		const N = `\[(\d+)\]`
 		m := matcher{}
 		switch {
-		case m.Find(path, dir_n):
+		case m.Find(path, RE("^/Dir/Dirs"+N+"$")):
 			coff.Dir.DirEntries[m[0]].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
-		case m.Find(path, dir_n_n):
+		case m.Find(path, RE("^/Dir/Dirs"+N+"/Dirs"+N+"$")):
 			coff.Dir.Dirs[m[0]].DirEntries[m[1]].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
-		case m.Find(path, dataentry_n):
+		case m.Find(path, RE("^/DataEntries"+N+"$")):
 			direntry := <-leafwalker
 			direntry.OffsetToData = offset - diroff
-		case m.Find(path, dataentry_n_off):
+		case m.Find(path, RE("^/DataEntries"+N+"/OffsetToData$")):
 			coff.Relocations[m[0]].RVA = offset - diroff
-		case m.Find(path, data_n):
+		case m.Find(path, RE("^/Data"+N+"$")):
 			coff.DataEntries[m[0]].OffsetToData = offset - diroff
 		}
 
