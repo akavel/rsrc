@@ -110,7 +110,8 @@ type Coff struct {
 	pe.SectionHeader32
 
 	Dir
-	Data []interface{}
+	DataEntries []DataEntry
+	Data        []interface{}
 
 	Relocations []RelocationEntry
 	Symbols     []Symbol
@@ -175,11 +176,13 @@ func run(fnamein, fnameico, fnameout string) error {
 				},
 			},
 		},
-		[]interface{}{
-			&DataEntry{
+		[]DataEntry{
+			DataEntry{
 				Size1:    uint32(manifest.Size()),
 				CodePage: 0, //FIXME: what value here? for now just tried 0
 			},
+		},
+		[]interface{}{
 			manifest,
 		},
 
@@ -213,12 +216,12 @@ func run(fnamein, fnameico, fnameout string) error {
 			coff.Dir.DirEntries[0].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
 		case "/Dir/Dirs[0]/Dirs[0]":
 			coff.Dir.Dirs[0].DirEntries[0].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
-		case "/Data[0]":
+		case "/DataEntries[0]":
 			coff.Dir.Dirs[0].Dirs[0].DirEntries[0].OffsetToData = offset - diroff
-		case "/Data[0]/OffsetToData":
+		case "/DataEntries[0]/OffsetToData":
 			coff.Relocations[0].RVA = offset - diroff
-		case "/Data[1]":
-			coff.Data[0].(*DataEntry).OffsetToData = offset - diroff
+		case "/Data[0]":
+			coff.DataEntries[0].OffsetToData = offset - diroff
 		case "/Relocations":
 			coff.SectionHeader32.PointerToRelocations = offset
 			coff.SectionHeader32.SizeOfRawData = offset - diroff
