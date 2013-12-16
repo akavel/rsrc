@@ -214,6 +214,7 @@ func run(fnamein, fnameico, fnameout string) error {
 	}
 
 	if len(icons) > 0 {
+		//FIXME: add corresponding DataEntries
 		/*
 			coff.Dir.NumberOfIdEntries+=2
 
@@ -253,6 +254,17 @@ func run(fnamein, fnameico, fnameout string) error {
 		*/
 	}
 
+	leafwalker := make(chan *DirEntry)
+	go func() {
+		for _, dir1 := range coff.Dir.Dirs { // resource type
+			for _, dir2 := range dir1.Dirs { // resource ID
+				for i := range dir2.DirEntries { // resource lang
+					leafwalker <- &dir2.DirEntries[i]
+				}
+			}
+		}
+	}()
+
 	// fill in some important offsets in resulting file
 	var offset, diroff uint32
 	Walk(coff, func(v reflect.Value, path string) error {
@@ -265,7 +277,8 @@ func run(fnamein, fnameico, fnameout string) error {
 		case "/Dir/Dirs[0]/Dirs[0]":
 			coff.Dir.Dirs[0].DirEntries[0].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
 		case "/DataEntries[0]":
-			coff.Dir.Dirs[0].Dirs[0].DirEntries[0].OffsetToData = offset - diroff
+			direntry := <-leafwalker
+			direntry.OffsetToData = offset - diroff
 		case "/DataEntries[0]/OffsetToData":
 			coff.Relocations[0].RVA = offset - diroff
 		case "/Data[0]":
