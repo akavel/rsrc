@@ -41,7 +41,7 @@ type DirEntry struct { // struct IMAGE_RESOURCE_DIRECTORY_ENTRY
 type DataEntry struct { // struct IMAGE_RESOURCE_DATA_ENTRY
 	OffsetToData uint32
 	Size1        uint32
-	CodePage     uint32
+	CodePage     uint32 //FIXME: what value here? for now just using 0
 	Reserved     uint32
 }
 
@@ -218,37 +218,17 @@ func run(fnamein, fnameico, fnameout string) error {
 			Characteristics:      0x0104, //FIXME: copied from windres.exe output, find out what should be here and why
 		},
 		pe.SectionHeader32{
-			Name: STRING_RSRC,
-			//NumberOfRelocations: 1,
+			Name:            STRING_RSRC,
 			Characteristics: 0x40000040, // "INITIALIZED_DATA MEM_READ" ?
 		},
 
-		// now, build "directory hierarchy" of .rsrc section: first type, then id/name, then language
-		Dir{
-		//NumberOfIdEntries: 1,
-		//DirEntries:        DirEntries{{NameOrId: RT_MANIFEST}},
-		//Dirs: Dirs{{
-		//	NumberOfIdEntries: 1,
-		//	DirEntries:        DirEntries{{NameOrId: uint32(<-newid)}}, // resource ID
-		//	Dirs: Dirs{{
-		//		NumberOfIdEntries: 1,
-		//		DirEntries:        LANG_ENTRY,
-		//	}},
-		//}},
-		},
-		[]DataEntry{
-		//DataEntry{
-		//	Size1:    uint32(manifest.Size()),
-		//	CodePage: 0, //FIXME: what value here? for now just tried 0 - TODO: fix also in other uses
-		//},
-		},
-		[]interface{}{
-		//manifest,
-		},
+		// "directory hierarchy" of .rsrc section: top level goes resource type, then id/name, then language
+		Dir{},
 
-		[]RelocationEntry{
-		//RELOC_ENTRY,
-		},
+		[]DataEntry{},
+		[]interface{}{},
+
+		[]RelocationEntry{},
 
 		[]Symbol{Symbol{
 			Name:           STRING_RSRC,
@@ -267,17 +247,7 @@ func run(fnamein, fnameico, fnameout string) error {
 	coff.AddResource(RT_MANIFEST, <-newid, manifest, uint32(manifest.Size()))
 
 	if len(icons) > 0 {
-		//FIXME: root directory must be sorted by NameOrId value
-
-		coff.Dir.NumberOfIdEntries += 2
-		coff.Dir.DirEntries = append(coff.Dir.DirEntries, DirEntry{NameOrId: RT_ICON})
-		coff.Dir.DirEntries = append(coff.Dir.DirEntries, DirEntry{NameOrId: RT_GROUP_ICON})
-
 		// RT_ICONs
-		coff.Dir.Dirs = append(coff.Dir.Dirs, Dir{
-			NumberOfIdEntries: uint16(len(icons)),
-		})
-		dir := &coff.Dir.Dirs[len(coff.Dir.Dirs)-1]
 		group := GRPICONDIR{ICONDIR: ico.ICONDIR{
 			Reserved: 0, // magic num.
 			Type:     1, // magic num.
@@ -285,37 +255,14 @@ func run(fnamein, fnameico, fnameout string) error {
 		}}
 		for _, icon := range icons {
 			id := <-newid
-
-			dir.DirEntries = append(dir.DirEntries, DirEntry{NameOrId: uint32(id)})
-			dir.Dirs = append(dir.Dirs, Dir{
-				NumberOfIdEntries: 1,
-				DirEntries:        LANG_ENTRY,
-			})
-
 			r := io.NewSectionReader(iconsf, int64(icon.ImageOffset), int64(icon.BytesInRes))
-			coff.DataEntries = append(coff.DataEntries, DataEntry{Size1: uint32(r.Size())})
-			coff.Relocations = append(coff.Relocations, RELOC_ENTRY)
-			coff.SectionHeader32.NumberOfRelocations++
-			coff.Data = append(coff.Data, r)
 
+			coff.AddResource(RT_ICON, id, r, uint32(r.Size()))
 			group.Entries = append(group.Entries, GRPICONDIRENTRY{icon.IconDirEntryCommon, id})
 		}
 
-		coff.Dir.Dirs = append(coff.Dir.Dirs, Dir{
-			NumberOfIdEntries: 1,
-			DirEntries:        DirEntries{{NameOrId: uint32(<-newid)}},
-			Dirs: Dirs{{
-				NumberOfIdEntries: 1,
-				DirEntries:        LANG_ENTRY,
-			}},
-		})
-		coff.DataEntries = append(coff.DataEntries, DataEntry{
-			Size1: uint32(binary.Size(group.ICONDIR) + len(icons)*binary.Size(group.Entries[0])),
-		})
-		coff.Relocations = append(coff.Relocations, RELOC_ENTRY)
-		coff.SectionHeader32.NumberOfRelocations++
-		coff.Data = append(coff.Data, group)
-
+		// RT_GROUP_ICON
+		coff.AddResource(RT_GROUP_ICON, <-newid, group, uint32(binary.Size(group.ICONDIR)+len(icons)*binary.Size(group.Entries[0])))
 	}
 
 	leafwalker := make(chan *DirEntry)
