@@ -270,7 +270,7 @@ func run(fnamein, fnameico, fnameout string) error {
 	N := `\[(\d+)\]`
 	dir_n := regexp.MustCompile("^/Dir/Dirs" + N + "$")
 	dir_n_n := regexp.MustCompile("^/Dir/Dirs" + N + "/Dirs" + N + "$")
-	//dataentry_n := regexp.MustCompile("^/DataEntries" + N + "$")
+	dataentry_n := regexp.MustCompile("^/DataEntries" + N + "$")
 	//dataentry_n_off := regexp.MustCompile("^/DataEntries" + N + "/OffsetToData$")
 	//data_n := regexp.MustCompile("^/Data" + N + "$")
 
@@ -285,9 +285,9 @@ func run(fnamein, fnameico, fnameout string) error {
 		//	coff.Dir.DirEntries[0].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
 		//case "/Dir/Dirs[0]/Dirs[0]":
 		//	coff.Dir.Dirs[0].DirEntries[0].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
-		case "/DataEntries[0]":
-			direntry := <-leafwalker
-			direntry.OffsetToData = offset - diroff
+		//case "/DataEntries[0]":
+		//	direntry := <-leafwalker
+		//	direntry.OffsetToData = offset - diroff
 		case "/DataEntries[0]/OffsetToData":
 			coff.Relocations[0].RVA = offset - diroff
 		case "/Data[0]":
@@ -304,6 +304,9 @@ func run(fnamein, fnameico, fnameout string) error {
 			coff.Dir.DirEntries[m[0]].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
 		case m.Find(path, dir_n_n):
 			coff.Dir.Dirs[m[0]].DirEntries[m[1]].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
+		case m.Find(path, dataentry_n):
+			direntry := <-leafwalker
+			direntry.OffsetToData = offset - diroff
 		}
 
 		if Plain(v.Kind()) {
