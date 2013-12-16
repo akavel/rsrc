@@ -11,7 +11,6 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
-	"unsafe"
 
 	"github.com/akavel/rsrc/ico"
 )
@@ -205,7 +204,6 @@ func (coff *Coff) Freeze() {
 		case m.Find(path, RE("^/DataEntries"+N+"$")):
 			direntry := <-leafwalker
 			direntry.OffsetToData = offset - diroff
-			fmt.Println("N", m[0], "direntry", unsafe.Pointer(direntry), "OffsetToData", direntry.OffsetToData, "offset", offset)
 		case m.Find(path, RE("^/DataEntries"+N+"/OffsetToData$")):
 			coff.Relocations[m[0]].RVA = offset - diroff
 		case m.Find(path, RE("^/Data"+N+"$")):
