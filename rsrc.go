@@ -273,7 +273,7 @@ func run(fnamein, fnameico, fnameout string) error {
 	dir_n_n := regexp.MustCompile("^/Dir/Dirs" + N + "/Dirs" + N + "$")
 	dataentry_n := regexp.MustCompile("^/DataEntries" + N + "$")
 	dataentry_n_off := regexp.MustCompile("^/DataEntries" + N + "/OffsetToData$")
-	//data_n := regexp.MustCompile("^/Data" + N + "$")
+	data_n := regexp.MustCompile("^/Data" + N + "$")
 
 	// fill in some important offsets in resulting file
 	var offset, diroff uint32
@@ -291,8 +291,8 @@ func run(fnamein, fnameico, fnameout string) error {
 		//	direntry.OffsetToData = offset - diroff
 		//case "/DataEntries[0]/OffsetToData":
 		//	coff.Relocations[0].RVA = offset - diroff
-		case "/Data[0]":
-			coff.DataEntries[0].OffsetToData = offset - diroff
+		//case "/Data[0]":
+		//	coff.DataEntries[0].OffsetToData = offset - diroff
 		case "/Relocations":
 			coff.SectionHeader32.PointerToRelocations = offset
 			coff.SectionHeader32.SizeOfRawData = offset - diroff
@@ -310,6 +310,8 @@ func run(fnamein, fnameico, fnameout string) error {
 			direntry.OffsetToData = offset - diroff
 		case m.Find(path, dataentry_n_off):
 			coff.Relocations[m[0]].RVA = offset - diroff
+		case m.Find(path, data_n):
+			coff.DataEntries[m[0]].OffsetToData = offset - diroff
 		}
 
 		if Plain(v.Kind()) {
