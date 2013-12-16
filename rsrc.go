@@ -1,9 +1,5 @@
 package main
 
-// TODO:
-// - to store icons, see: http://blogs.msdn.com/b/oldnewthing/archive/2012/07/20/10331787.aspx
-//   - also need to first read and split input ico file
-
 import (
 	"debug/pe"
 	"encoding/binary"
@@ -81,10 +77,9 @@ var (
 		SymbolIndex: 0, // "(zero based) index in the Symbol table to which the reference refers. Once you have loaded the COFF file into memory and know where each symbol is, you find the new updated address for the given symbol and update the reference accordingly."
 		Type:        7, // according to ldpe.c, this decodes to: IMAGE_REL_I386_DIR32NB
 	}
-
-	RE = regexp.MustCompile
 )
 
+// on storing icons, see: http://blogs.msdn.com/b/oldnewthing/archive/2012/07/20/10331787.aspx
 type GRPICONDIR struct {
 	ico.ICONDIR
 	Entries []GRPICONDIRENTRY
@@ -100,7 +95,7 @@ func main() {
 	var fnamein, fnameico, fnameout string
 	flags := flag.NewFlagSet("", flag.ContinueOnError)
 	flags.StringVar(&fnamein, "manifest", "", "path to a Windows manifest file to embed")
-	flags.StringVar(&fnameico, "ico", "", "UNSUPPORTED: path to ICO file to embed")
+	flags.StringVar(&fnameico, "ico", "", "path to ICO file to embed")
 	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
 	_ = flags.Parse(os.Args[1:])
 	if fnamein == "" {
@@ -290,6 +285,7 @@ func run(fnamein, fnameico, fnameout string) error {
 		case "/Symbols":
 			coff.FileHeader.PointerToSymbolTable = offset
 		}
+		RE := regexp.MustCompile
 		const N = `\[(\d+)\]`
 		m := matcher{}
 		switch {
