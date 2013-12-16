@@ -25,6 +25,10 @@ type GRPICONDIR struct {
 	Entries []GRPICONDIRENTRY
 }
 
+func (group GRPICONDIR) Size() int64 {
+	return int64(binary.Size(group.ICONDIR) + len(group.Entries)*binary.Size(group.Entries[0]))
+}
+
 type GRPICONDIRENTRY struct {
 	ico.IconDirEntryCommon
 	Id uint16
@@ -92,7 +96,7 @@ func run(fnamein, fnameico, fnameout string) error {
 
 	coff := coff.NewRSRC()
 
-	coff.AddResource(RT_MANIFEST, <-newid, manifest, uint32(manifest.Size()))
+	coff.AddResource(RT_MANIFEST, <-newid, manifest)
 
 	if len(icons) > 0 {
 		// RT_ICONs
@@ -105,12 +109,12 @@ func run(fnamein, fnameico, fnameout string) error {
 			id := <-newid
 			r := io.NewSectionReader(iconsf, int64(icon.ImageOffset), int64(icon.BytesInRes))
 
-			coff.AddResource(RT_ICON, id, r, uint32(r.Size()))
+			coff.AddResource(RT_ICON, id, r)
 			group.Entries = append(group.Entries, GRPICONDIRENTRY{icon.IconDirEntryCommon, id})
 		}
 
 		// RT_GROUP_ICON
-		coff.AddResource(RT_GROUP_ICON, <-newid, group, uint32(binary.Size(group.ICONDIR)+len(icons)*binary.Size(group.Entries[0])))
+		coff.AddResource(RT_GROUP_ICON, <-newid, group)
 	}
 
 	coff.Freeze()

@@ -74,13 +74,17 @@ var (
 	}
 )
 
+type Sizer interface {
+	Size() int64 //NOTE: must not exceed limits of uint32, or behavior is undefined
+}
+
 type Coff struct {
 	pe.FileHeader
 	pe.SectionHeader32
 
 	Dir
 	DataEntries []DataEntry
-	Data        []interface{}
+	Data        []Sizer
 
 	Relocations []RelocationEntry
 	Symbols     []Symbol
@@ -106,7 +110,7 @@ func NewRSRC() *Coff {
 		Dir{},
 
 		[]DataEntry{},
-		[]interface{}{},
+		[]Sizer{},
 
 		[]RelocationEntry{},
 
@@ -126,8 +130,7 @@ func NewRSRC() *Coff {
 }
 
 //NOTE: function assumes that 'id' is increasing on each entry
-func (coff *Coff) AddResource(kind uint32, id uint16, data interface{}, size uint32) {
-	//FIXME: find correct place to insert on all levels, then find index in Data
+func (coff *Coff) AddResource(kind uint32, id uint16, data Sizer) {
 	coff.Relocations = append(coff.Relocations, RELOC_ENTRY)
 	coff.SectionHeader32.NumberOfRelocations++
 
@@ -162,8 +165,8 @@ func (coff *Coff) AddResource(kind uint32, id uint16, data interface{}, size uin
 	n--
 
 	// insert new data in correct place
-	coff.DataEntries = append(coff.DataEntries[:n], append([]DataEntry{{Size1: size}}, coff.DataEntries[n:]...)...)
-	coff.Data = append(coff.Data[:n], append([]interface{}{data}, coff.Data[n:]...)...)
+	coff.DataEntries = append(coff.DataEntries[:n], append([]DataEntry{{Size1: uint32(data.Size())}}, coff.DataEntries[n:]...)...)
+	coff.Data = append(coff.Data[:n], append([]Sizer{data}, coff.Data[n:]...)...)
 }
 
 // Freeze fills in some important offsets in resulting file.
@@ -212,7 +215,7 @@ func (coff *Coff) Freeze() {
 			offset += uint32(binary.Size(v.Interface())) // TODO: change to v.Type().Size() ?
 			return nil
 		}
-		vv, ok := v.Interface().(binutil.SizedReader)
+		vv, ok := v.Interface().(Sizer)
 		if ok {
 			offset += uint32(vv.Size())
 			return binutil.WALK_SKIP
