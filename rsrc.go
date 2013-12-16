@@ -15,21 +15,26 @@ import (
 	"github.com/akavel/rsrc/ico"
 )
 
-type ImageResourceDirectory struct {
+type Dir struct { // struct IMAGE_RESOURCE_DIRECTORY
 	Characteristics      uint32
 	TimeDateStamp        uint32
 	MajorVersion         uint16
 	MinorVersion         uint16
 	NumberOfNamedEntries uint16
 	NumberOfIdEntries    uint16
+	DirEntries
+	Dirs
 }
 
-type ImageResourceDirectoryEntry struct {
+type DirEntries []DirEntry
+type Dirs []Dir
+
+type DirEntry struct { // struct IMAGE_RESOURCE_DIRECTORY_ENTRY
 	NameOrId     uint32
 	OffsetToData uint32
 }
 
-type ImageResourceDataEntry struct {
+type DataEntry struct { // struct IMAGE_RESOURCE_DATA_ENTRY
 	OffsetToData uint32
 	Size1        uint32
 	CodePage     uint32
@@ -104,6 +109,7 @@ type Coff struct {
 	pe.FileHeader
 	pe.SectionHeader32
 
+	Dir
 	Data []interface{}
 
 	Relocations []RelocationEntry
@@ -153,31 +159,27 @@ func run(fnamein, fnameico, fnameout string) error {
 		},
 
 		// now, build "directory hierarchy" of .rsrc section: first type, then id/name, then language
+		Dir{
+			NumberOfIdEntries: 1,
+			DirEntries:        DirEntries{{NameOrId: RT_MANIFEST}},
+			Dirs: Dirs{
+				Dir{
+					NumberOfIdEntries: 1,
+					DirEntries:        DirEntries{{NameOrId: 1}}, // resource ID
+					Dirs: Dirs{
+						Dir{
+							NumberOfIdEntries: 1,
+							DirEntries:        DirEntries{{NameOrId: 0x0409}}, //FIXME: language; what value should be here?
+						},
+					},
+				},
+			},
+		},
 		[]interface{}{
-			&ImageResourceDirectory{
-				NumberOfIdEntries: 1,
-			},
-			&ImageResourceDirectoryEntry{
-				NameOrId: RT_MANIFEST,
-			},
-			&ImageResourceDirectory{
-				NumberOfIdEntries: 1,
-			},
-			&ImageResourceDirectoryEntry{
-				NameOrId: 1, // ID
-			},
-			&ImageResourceDirectory{
-				NumberOfIdEntries: 1,
-			},
-			&ImageResourceDirectoryEntry{
-				NameOrId: 0x0409, //FIXME: language; what value should be here?
-			},
-
-			&ImageResourceDataEntry{
+			&DataEntry{
 				Size1:    uint32(manifest.Size()),
 				CodePage: 0, //FIXME: what value here? for now just tried 0
 			},
-
 			manifest,
 		},
 
@@ -204,19 +206,19 @@ func run(fnamein, fnameico, fnameout string) error {
 	var offset, diroff uint32
 	Walk(coff, func(v reflect.Value, path string) error {
 		switch path {
-		case "/Data":
+		case "/Dir":
 			coff.SectionHeader32.PointerToRawData = offset
 			diroff = offset
-		case "/Data[2]":
-			coff.Data[1].(*ImageResourceDirectoryEntry).OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
-		case "/Data[4]":
-			coff.Data[3].(*ImageResourceDirectoryEntry).OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
-		case "/Data[6]":
-			coff.Data[5].(*ImageResourceDirectoryEntry).OffsetToData = offset - diroff
-		case "/Data[6]/OffsetToData":
+		case "/Dir/Dirs[0]":
+			coff.Dir.DirEntries[0].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
+		case "/Dir/Dirs[0]/Dirs[0]":
+			coff.Dir.Dirs[0].DirEntries[0].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
+		case "/Data[0]":
+			coff.Dir.Dirs[0].Dirs[0].DirEntries[0].OffsetToData = offset - diroff
+		case "/Data[0]/OffsetToData":
 			coff.Relocations[0].RVA = offset - diroff
-		case "/Data[7]":
-			coff.Data[6].(*ImageResourceDataEntry).OffsetToData = offset - diroff
+		case "/Data[1]":
+			coff.Data[0].(*DataEntry).OffsetToData = offset - diroff
 		case "/Relocations":
 			coff.SectionHeader32.PointerToRelocations = offset
 			coff.SectionHeader32.SizeOfRawData = offset - diroff
