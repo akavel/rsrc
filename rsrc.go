@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
+	"strconv"
 
 	"github.com/akavel/rsrc/ico"
 )
@@ -265,6 +267,13 @@ func run(fnamein, fnameico, fnameout string) error {
 		}
 	}()
 
+	N := `\[(\d+)\]`
+	dir_n := regexp.MustCompile("^/Dir/Dirs" + N + "$")
+	//dir_n_n := regexp.MustCompile("^/Dir/Dirs" + N + "/Dirs" + N + "$")
+	//dataentry_n := regexp.MustCompile("^/DataEntries" + N + "$")
+	//dataentry_n_off := regexp.MustCompile("^/DataEntries" + N + "/OffsetToData$")
+	//data_n := regexp.MustCompile("^/Data" + N + "$")
+
 	// fill in some important offsets in resulting file
 	var offset, diroff uint32
 	Walk(coff, func(v reflect.Value, path string) error {
@@ -272,8 +281,8 @@ func run(fnamein, fnameico, fnameout string) error {
 		case "/Dir":
 			coff.SectionHeader32.PointerToRawData = offset
 			diroff = offset
-		case "/Dir/Dirs[0]":
-			coff.Dir.DirEntries[0].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
+		//case "/Dir/Dirs[0]":
+		//	coff.Dir.DirEntries[0].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
 		case "/Dir/Dirs[0]/Dirs[0]":
 			coff.Dir.Dirs[0].DirEntries[0].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
 		case "/DataEntries[0]":
@@ -288,6 +297,11 @@ func run(fnamein, fnameico, fnameout string) error {
 			coff.SectionHeader32.SizeOfRawData = offset - diroff
 		case "/Symbols":
 			coff.FileHeader.PointerToSymbolTable = offset
+		}
+		m := matcher{}
+		switch {
+		case m.Find(path, dir_n):
+			coff.Dir.DirEntries[m[0]].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
 		}
 
 		if Plain(v.Kind()) {
@@ -329,4 +343,27 @@ func Plain(kind reflect.Kind) bool {
 		return true
 	}
 	return false
+}
+
+func MustAtoi(s string) int {
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		panic(err)
+	}
+	return i
+}
+
+type matcher []int
+
+func (m *matcher) Find(s string, re *regexp.Regexp) bool {
+	subs := re.FindStringSubmatch(s)
+	if subs == nil {
+		return false
+	}
+
+	*m = (*m)[:0]
+	for i := 1; i < len(subs); i++ {
+		*m = append(*m, MustAtoi(subs[i]))
+	}
+	return true
 }
