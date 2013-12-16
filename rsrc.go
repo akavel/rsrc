@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/akavel/rsrc/binutil"
 	"github.com/akavel/rsrc/ico"
 )
 
@@ -220,7 +221,7 @@ func (coff *Coff) Freeze() {
 	}()
 
 	var offset, diroff uint32
-	Walk(coff, func(v reflect.Value, path string) error {
+	binutil.Walk(coff, func(v reflect.Value, path string) error {
 		switch path {
 		case "/Dir":
 			coff.SectionHeader32.PointerToRawData = offset
@@ -248,14 +249,14 @@ func (coff *Coff) Freeze() {
 			coff.DataEntries[m[0]].OffsetToData = offset - diroff
 		}
 
-		if Plain(v.Kind()) {
+		if binutil.Plain(v.Kind()) {
 			offset += uint32(binary.Size(v.Interface())) // TODO: change to v.Type().Size() ?
 			return nil
 		}
 		vv, ok := v.Interface().(SizedReader)
 		if ok {
 			offset += uint32(vv.Size())
-			return WALK_SKIP
+			return binutil.WALK_SKIP
 		}
 		return nil
 	})
@@ -322,15 +323,15 @@ func run(fnamein, fnameico, fnameout string) error {
 	coff.Freeze()
 
 	// write the resulting file to disk
-	Walk(coff, func(v reflect.Value, path string) error {
-		if Plain(v.Kind()) {
+	binutil.Walk(coff, func(v reflect.Value, path string) error {
+		if binutil.Plain(v.Kind()) {
 			w.WriteLE(v.Interface())
 			return nil
 		}
 		vv, ok := v.Interface().(SizedReader)
 		if ok {
 			w.WriteFromSized(vv)
-			return WALK_SKIP
+			return binutil.WALK_SKIP
 		}
 		return nil
 	})
@@ -340,14 +341,6 @@ func run(fnamein, fnameico, fnameout string) error {
 	}
 
 	return nil
-}
-
-func Plain(kind reflect.Kind) bool {
-	switch kind {
-	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128:
-		return true
-	}
-	return false
 }
 
 func MustAtoi(s string) int {
