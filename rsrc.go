@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"regexp"
@@ -72,7 +73,12 @@ const (
 
 var (
 	STRING_RSRC = [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0}
+
 	LANG_ENTRY  = DirEntries{{NameOrId: 0x0409}} //FIXME: language; what value should be here?
+	RELOC_ENTRY = RelocationEntry{
+		SymbolIndex: 0, // "(zero based) index in the Symbol table to which the reference refers. Once you have loaded the COFF file into memory and know where each symbol is, you find the new updated address for the given symbol and update the reference accordingly."
+		Type:        7, // according to ldpe.c, this decodes to: IMAGE_REL_I386_DIR32NB
+	}
 
 	RE = regexp.MustCompile
 )
@@ -191,17 +197,16 @@ func run(fnamein, fnameico, fnameout string) error {
 		[]DataEntry{
 			DataEntry{
 				Size1:    uint32(manifest.Size()),
-				CodePage: 0, //FIXME: what value here? for now just tried 0
+				CodePage: 0, //FIXME: what value here? for now just tried 0 - TODO: fix also in other uses
 			},
 		},
 		[]interface{}{
 			manifest,
 		},
 
-		[]RelocationEntry{RelocationEntry{
-			SymbolIndex: 0, // "(zero based) index in the Symbol table to which the reference refers. Once you have loaded the COFF file into memory and know where each symbol is, you find the new updated address for the given symbol and update the reference accordingly."
-			Type:        7, // according to ldpe.c, this decodes to: IMAGE_REL_I386_DIR32NB
-		}},
+		[]RelocationEntry{
+			RELOC_ENTRY,
+		},
 
 		[]Symbol{Symbol{
 			Name:           STRING_RSRC,
@@ -220,43 +225,52 @@ func run(fnamein, fnameico, fnameout string) error {
 	if len(icons) > 0 {
 		//FIXME: add corresponding DataEntries
 		//FIXME: add relocations
-		/*
-			coff.Dir.NumberOfIdEntries+=2
 
-			coff.Dir.DirEntries = append(coff.Dir.DirEntries, DirEntry{NameOrId: RT_ICON})
-			coff.Dir.Dirs = append(coff.Dir.Dirs, Dir{
-				NumberOfIdEntries: len(icons),
-			})
-			dir := &coff.Dir.Dirs[len(coff.Dir.Dirs)-1]
-			group := GRPICONDIR{
-				Reserved: 0, // magic num.
-				Type: 1, // magic num.
-				Count: len(icons),
-			}
-			for i, icon := range icons {
-				id := <-newid
+		coff.Dir.NumberOfIdEntries += 2
+		coff.Dir.DirEntries = append(coff.Dir.DirEntries, DirEntry{NameOrId: RT_ICON})
+		coff.Dir.DirEntries = append(coff.Dir.DirEntries, DirEntry{NameOrId: RT_GROUP_ICON})
 
-				group.Entries = append(group.Entries, GRPICONDIRENTRY{icon, id})
-				dir.DirEntries = append(dir.DirEntries, DirEntry{NameOrId: uint32(id)})
-				dir.Dirs = append(dir.Dirs, Dir{
-					NumberOfIdEntries: 1,
-					DirEntries: LANG_ENTRY,
-				})
+		// RT_ICONs
+		coff.Dir.Dirs = append(coff.Dir.Dirs, Dir{
+			NumberOfIdEntries: uint16(len(icons)),
+		})
+		dir := &coff.Dir.Dirs[len(coff.Dir.Dirs)-1]
+		group := GRPICONDIR{ICONDIR: ico.ICONDIR{
+			Reserved: 0, // magic num.
+			Type:     1, // magic num.
+			Count:    uint16(len(icons)),
+		}}
+		for _, icon := range icons {
+			id := <-newid
 
-				coff.Data = append(coff.Data, io.NewSectionReader(iconsf, icon.ImageOffset, icon.BytesInRes))
-			}
-
-			coff.Dir.DirEntries = append(coff.Dir.DirEntries, DirEntry{NameOrId: RT_GROUP_ICON})
-			coff.Dir.Dirs = append(coff.Dir.Dirs, Dir{
+			dir.DirEntries = append(dir.DirEntries, DirEntry{NameOrId: uint32(id)})
+			dir.Dirs = append(dir.Dirs, Dir{
 				NumberOfIdEntries: 1,
-				DirEntries: DirEntries{{NameOrId: uint32(<-newid)}},
-				Dirs: Dirs{{
-					NumberOfIdEntries: 1,
-					DirEntries: LANG_ENTRY,
-				}},
+				DirEntries:        LANG_ENTRY,
 			})
-			coff.Data = append(coff.Data, group)
-		*/
+
+			r := io.NewSectionReader(iconsf, int64(icon.ImageOffset), int64(icon.BytesInRes))
+			coff.DataEntries = append(coff.DataEntries, DataEntry{Size1: uint32(r.Size())})
+			coff.Relocations = append(coff.Relocations, RELOC_ENTRY)
+			coff.Data = append(coff.Data, r)
+
+			group.Entries = append(group.Entries, GRPICONDIRENTRY{icon.IconDirEntryCommon, id})
+		}
+
+		coff.Dir.Dirs = append(coff.Dir.Dirs, Dir{
+			NumberOfIdEntries: 1,
+			DirEntries:        DirEntries{{NameOrId: uint32(<-newid)}},
+			Dirs: Dirs{{
+				NumberOfIdEntries: 1,
+				DirEntries:        LANG_ENTRY,
+			}},
+		})
+		coff.DataEntries = append(coff.DataEntries, DataEntry{
+			Size1: uint32(binary.Size(group.ICONDIR) + len(icons)*binary.Size(group.Entries[0])),
+		})
+		coff.Relocations = append(coff.Relocations, RELOC_ENTRY)
+		coff.Data = append(coff.Data, group)
+
 	}
 
 	leafwalker := make(chan *DirEntry)
