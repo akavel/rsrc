@@ -13,6 +13,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 
 	"github.com/akavel/rsrc/ico"
@@ -131,6 +132,47 @@ type Coff struct {
 	StringsHeader
 }
 
+//NOTE: function assumes that 'id' is increasing on each entry
+func (coff *Coff) AddResource(kind uint32, id uint16, data interface{}, size uint32) {
+	//FIXME: find correct place to insert on all levels, then find index in Data
+	coff.Relocations = append(coff.Relocations, RELOC_ENTRY)
+	coff.SectionHeader32.NumberOfRelocations++
+
+	// find top level entry, inserting new if necessary at correct sorted position
+	entries0 := coff.Dir.DirEntries
+	dirs0 := coff.Dir.Dirs
+	i0 := sort.Search(len(entries0), func(i int) bool {
+		return entries0[i].NameOrId >= kind
+	})
+	if i0 >= len(entries0) || entries0[i0].NameOrId != kind {
+		// inserting new entry & dir
+		entries0 = append(entries0[:i0], append([]DirEntry{{NameOrId: kind}}, entries0[i0:]...)...)
+		dirs0 = append(dirs0[:i0], append([]Dir{{}}, dirs0[i0:]...)...)
+		coff.Dir.NumberOfIdEntries++
+	}
+	coff.Dir.DirEntries = entries0
+	coff.Dir.Dirs = dirs0
+
+	// for second level, assume ID is always increasing, so we don't have to sort
+	dirs0[i0].DirEntries = append(dirs0[i0].DirEntries, DirEntry{NameOrId: uint32(id)})
+	dirs0[i0].Dirs = append(dirs0[i0].Dirs, Dir{
+		NumberOfIdEntries: 1,
+		DirEntries:        LANG_ENTRY,
+	})
+	dirs0[i0].NumberOfIdEntries++
+
+	// calculate preceding DirEntry leaves, to find new index in Data & DataEntries
+	n := 0
+	for _, dir0 := range dirs0[:i0+1] {
+		n += len(dir0.DirEntries) //NOTE: assuming 1 language here; TODO: dwell deeper if more langs added
+	}
+	n--
+
+	// insert new data in correct place
+	coff.DataEntries = append(coff.DataEntries[:n], append([]DataEntry{{Size1: size}}, coff.DataEntries[n:]...)...)
+	coff.Data = append(coff.Data[:n], append([]interface{}{data}, coff.Data[n:]...)...)
+}
+
 func run(fnamein, fnameico, fnameout string) error {
 	manifest, err := SizedOpen(fnamein)
 	if err != nil {
@@ -176,36 +218,36 @@ func run(fnamein, fnameico, fnameout string) error {
 			Characteristics:      0x0104, //FIXME: copied from windres.exe output, find out what should be here and why
 		},
 		pe.SectionHeader32{
-			Name:                STRING_RSRC,
-			NumberOfRelocations: 1,
-			Characteristics:     0x40000040, // "INITIALIZED_DATA MEM_READ" ?
+			Name: STRING_RSRC,
+			//NumberOfRelocations: 1,
+			Characteristics: 0x40000040, // "INITIALIZED_DATA MEM_READ" ?
 		},
 
 		// now, build "directory hierarchy" of .rsrc section: first type, then id/name, then language
 		Dir{
-			NumberOfIdEntries: 1,
-			DirEntries:        DirEntries{{NameOrId: RT_MANIFEST}},
-			Dirs: Dirs{{
-				NumberOfIdEntries: 1,
-				DirEntries:        DirEntries{{NameOrId: uint32(<-newid)}}, // resource ID
-				Dirs: Dirs{{
-					NumberOfIdEntries: 1,
-					DirEntries:        LANG_ENTRY,
-				}},
-			}},
+		//NumberOfIdEntries: 1,
+		//DirEntries:        DirEntries{{NameOrId: RT_MANIFEST}},
+		//Dirs: Dirs{{
+		//	NumberOfIdEntries: 1,
+		//	DirEntries:        DirEntries{{NameOrId: uint32(<-newid)}}, // resource ID
+		//	Dirs: Dirs{{
+		//		NumberOfIdEntries: 1,
+		//		DirEntries:        LANG_ENTRY,
+		//	}},
+		//}},
 		},
 		[]DataEntry{
-			DataEntry{
-				Size1:    uint32(manifest.Size()),
-				CodePage: 0, //FIXME: what value here? for now just tried 0 - TODO: fix also in other uses
-			},
+		//DataEntry{
+		//	Size1:    uint32(manifest.Size()),
+		//	CodePage: 0, //FIXME: what value here? for now just tried 0 - TODO: fix also in other uses
+		//},
 		},
 		[]interface{}{
-			manifest,
+		//manifest,
 		},
 
 		[]RelocationEntry{
-			RELOC_ENTRY,
+		//RELOC_ENTRY,
 		},
 
 		[]Symbol{Symbol{
@@ -222,9 +264,10 @@ func run(fnamein, fnameico, fnameout string) error {
 		},
 	}
 
+	coff.AddResource(RT_MANIFEST, <-newid, manifest, uint32(manifest.Size()))
+
 	if len(icons) > 0 {
-		//FIXME: add corresponding DataEntries
-		//FIXME: add relocations
+		//FIXME: root directory must be sorted by NameOrId value
 
 		coff.Dir.NumberOfIdEntries += 2
 		coff.Dir.DirEntries = append(coff.Dir.DirEntries, DirEntry{NameOrId: RT_ICON})
