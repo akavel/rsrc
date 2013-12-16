@@ -169,6 +169,62 @@ func (coff *Coff) AddResource(kind uint32, id uint16, data interface{}, size uin
 	coff.Data = append(coff.Data[:n], append([]interface{}{data}, coff.Data[n:]...)...)
 }
 
+// Freeze fills in some important offsets in resulting file.
+func (coff *Coff) Freeze() {
+	leafwalker := make(chan *DirEntry)
+	go func() {
+		for _, dir1 := range coff.Dir.Dirs { // resource type
+			for _, dir2 := range dir1.Dirs { // resource ID
+				for i := range dir2.DirEntries { // resource lang
+					leafwalker <- &dir2.DirEntries[i]
+				}
+			}
+		}
+	}()
+
+	var offset, diroff uint32
+	Walk(coff, func(v reflect.Value, path string) error {
+		switch path {
+		case "/Dir":
+			coff.SectionHeader32.PointerToRawData = offset
+			diroff = offset
+		case "/Relocations":
+			coff.SectionHeader32.PointerToRelocations = offset
+			coff.SectionHeader32.SizeOfRawData = offset - diroff
+		case "/Symbols":
+			coff.FileHeader.PointerToSymbolTable = offset
+		}
+		RE := regexp.MustCompile
+		const N = `\[(\d+)\]`
+		m := matcher{}
+		switch {
+		case m.Find(path, RE("^/Dir/Dirs"+N+"$")):
+			coff.Dir.DirEntries[m[0]].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
+		case m.Find(path, RE("^/Dir/Dirs"+N+"/Dirs"+N+"$")):
+			coff.Dir.Dirs[m[0]].DirEntries[m[1]].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
+		case m.Find(path, RE("^/DataEntries"+N+"$")):
+			direntry := <-leafwalker
+			direntry.OffsetToData = offset - diroff
+			fmt.Println("N", m[0], "direntry", unsafe.Pointer(direntry), "OffsetToData", direntry.OffsetToData, "offset", offset)
+		case m.Find(path, RE("^/DataEntries"+N+"/OffsetToData$")):
+			coff.Relocations[m[0]].RVA = offset - diroff
+		case m.Find(path, RE("^/Data"+N+"$")):
+			coff.DataEntries[m[0]].OffsetToData = offset - diroff
+		}
+
+		if Plain(v.Kind()) {
+			offset += uint32(binary.Size(v.Interface())) // TODO: change to v.Type().Size() ?
+			return nil
+		}
+		vv, ok := v.Interface().(SizedReader)
+		if ok {
+			offset += uint32(vv.Size())
+			return WALK_SKIP
+		}
+		return nil
+	})
+}
+
 func run(fnamein, fnameico, fnameout string) error {
 	manifest, err := SizedOpen(fnamein)
 	if err != nil {
@@ -261,59 +317,7 @@ func run(fnamein, fnameico, fnameout string) error {
 		coff.AddResource(RT_GROUP_ICON, <-newid, group, uint32(binary.Size(group.ICONDIR)+len(icons)*binary.Size(group.Entries[0])))
 	}
 
-	leafwalker := make(chan *DirEntry)
-	go func() {
-		for _, dir1 := range coff.Dir.Dirs { // resource type
-			for _, dir2 := range dir1.Dirs { // resource ID
-				for i := range dir2.DirEntries { // resource lang
-					leafwalker <- &dir2.DirEntries[i]
-				}
-			}
-		}
-	}()
-
-	// fill in some important offsets in resulting file
-	var offset, diroff uint32
-	Walk(coff, func(v reflect.Value, path string) error {
-		switch path {
-		case "/Dir":
-			coff.SectionHeader32.PointerToRawData = offset
-			diroff = offset
-		case "/Relocations":
-			coff.SectionHeader32.PointerToRelocations = offset
-			coff.SectionHeader32.SizeOfRawData = offset - diroff
-		case "/Symbols":
-			coff.FileHeader.PointerToSymbolTable = offset
-		}
-		RE := regexp.MustCompile
-		const N = `\[(\d+)\]`
-		m := matcher{}
-		switch {
-		case m.Find(path, RE("^/Dir/Dirs"+N+"$")):
-			coff.Dir.DirEntries[m[0]].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
-		case m.Find(path, RE("^/Dir/Dirs"+N+"/Dirs"+N+"$")):
-			coff.Dir.Dirs[m[0]].DirEntries[m[1]].OffsetToData = MASK_SUBDIRECTORY | (offset - diroff)
-		case m.Find(path, RE("^/DataEntries"+N+"$")):
-			direntry := <-leafwalker
-			direntry.OffsetToData = offset - diroff
-			fmt.Println("N", m[0], "direntry", unsafe.Pointer(direntry), "OffsetToData", direntry.OffsetToData, "offset", offset)
-		case m.Find(path, RE("^/DataEntries"+N+"/OffsetToData$")):
-			coff.Relocations[m[0]].RVA = offset - diroff
-		case m.Find(path, RE("^/Data"+N+"$")):
-			coff.DataEntries[m[0]].OffsetToData = offset - diroff
-		}
-
-		if Plain(v.Kind()) {
-			offset += uint32(binary.Size(v.Interface())) // TODO: change to v.Type().Size() ?
-			return nil
-		}
-		vv, ok := v.Interface().(SizedReader)
-		if ok {
-			offset += uint32(vv.Size())
-			return WALK_SKIP
-		}
-		return nil
-	})
+	coff.Freeze()
 
 	// write the resulting file to disk
 	Walk(coff, func(v reflect.Value, path string) error {
