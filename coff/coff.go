@@ -91,7 +91,7 @@ type Coff struct {
 	pe.FileHeader
 	pe.SectionHeader32
 
-	Dir
+	*Dir
 	DataEntries []DataEntry
 	Data        []Sizer
 
@@ -117,7 +117,7 @@ func NewRDATA() *Coff {
 		},
 
 		// "directory hierarchy" of .rsrc section; empty for .data function
-		Dir{},
+		nil,
 		[]DataEntry{},
 
 		[]Sizer{},
@@ -143,9 +143,8 @@ func NewRDATA() *Coff {
 //NOTE: only usable for Coff created using NewRDATA
 //NOTE: symbol names must be probably >8 characters long
 //NOTE: symbol names should not contain embedded zeroes
-func (coff *Coff) AddData(beginsymbol, endsymbol string, data Sizer) {
-	coff.addSymbol(beginsymbol)
-	coff.addSymbol(endsymbol)
+func (coff *Coff) AddData(symbol string, data Sizer) {
+	coff.addSymbol(symbol)
 	coff.Data = append(coff.Data, data)
 	coff.SectionHeader32.SizeOfRawData += uint32(data.Size())
 }
@@ -164,12 +163,10 @@ func (coff *Coff) addSymbol(s string) {
 		//Name: // will be filled in Freeze
 		//Value: // as above
 		SectionNumber:  1,
-		Type:           DT_PTR<<4 | T_UCHAR, // unsigned char* // (?) or use void* ? T_VOID=1
-		StorageClass:   2,                   // 2=C_EXT, or 5=C_EXTDEF ?
+		Type:           0, // why 0??? // DT_PTR<<4 | T_UCHAR, // unsigned char* // (?) or use void* ? T_VOID=1
+		StorageClass:   2, // 2=C_EXT, or 5=C_EXTDEF ?
 		AuxiliaryCount: 0,
 	})
-
-	coff.Relocations = append(coff.Relocations, RELOC_ENTRY)
 }
 
 func NewRSRC() *Coff {
@@ -188,7 +185,7 @@ func NewRSRC() *Coff {
 		},
 
 		// "directory hierarchy" of .rsrc section: top level goes resource type, then id/name, then language
-		Dir{},
+		&Dir{},
 
 		[]DataEntry{},
 		[]Sizer{},
@@ -298,21 +295,12 @@ func (coff *Coff) freezeRDATA() {
 		const N = `\[(\d+)\]`
 		m := matcher{}
 		//TODO: adjust symbol pointers
-		//TODO: add relocations
 		//TODO: fill Symbols.Name, .Value
 		switch {
 		case m.Find(path, RE("^/Data"+N+"$")):
 			n := m[0]
-			sz := uint32(coff.Data[n].Size())
-			coff.Symbols[1+2*n].Value = offset - diroff        // FIXME: is it ok?
-			coff.Symbols[1+2*n+1].Value = offset - diroff + sz // FIXME: is it ok?
-		case m.Find(path, RE("^/Symbols"+N+"/Value$")):
-			n := m[0]
-			if n == 0 {
-				break
-			}
-			coff.Relocations[n-1].RVA = offset - diroff
-		case path == "/Strings":
+			coff.Symbols[1+n].Value = offset - diroff // FIXME: is it ok?
+		case path == "/StringsHeader":
 			stringsoff = offset
 		case m.Find(path, RE("^/Strings"+N+"$")):
 			binary.LittleEndian.PutUint32(coff.Symbols[m[0]+1].Name[4:8], offset-stringsoff)

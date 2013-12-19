@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/akavel/rsrc/binutil"
 	"github.com/akavel/rsrc/coff"
@@ -79,7 +80,8 @@ func rundata(fnamedata, fnameout string) error {
 	symname := fmt.Sprintf("_rsrc_%04x", rand.Uint32())
 
 	coff := coff.NewRDATA()
-	coff.AddData(symname+"_begin", symname+"_end", dat)
+	coff.AddData(symname+"_begin", dat)
+	coff.AddData(symname+"_end", io.NewSectionReader(strings.NewReader("\000\000"), 0, 2)) // TODO: why? copied from as-generated
 	coff.Freeze()
 	err = write(coff, fnameout)
 	if err != nil {

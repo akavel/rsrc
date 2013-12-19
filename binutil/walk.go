@@ -31,7 +31,7 @@ func walk(v reflect.Value, spath string, walker Walker) error {
 		return err
 	}
 	v = reflect.Indirect(v)
-	switch v.Type().Kind() {
+	switch v.Kind() {
 	case reflect.Slice, reflect.Array:
 		for i := 0; i < v.Len(); i++ {
 			err = walk(v.Index(i), spath+fmt.Sprintf("[%d]", i), walker)
