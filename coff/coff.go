@@ -6,7 +6,9 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strings"
 	"strconv"
+	"io"
 
 	"github.com/akavel/rsrc/binutil"
 )
@@ -64,8 +66,15 @@ const (
 	RT_MANIFEST   = 24
 )
 
+// http://www.delorie.com/djgpp/doc/coff/symtab.html
+const (
+	DT_PTR = 1
+	T_UCHAR = 12
+)
+
 var (
 	STRING_RSRC = [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0}
+	STRING_DATA = [8]byte{'.', 'd', 'a', 't', 'a', 0, 0, 0}
 
 	LANG_ENTRY  = DirEntry{NameOrId: 0x0409} //FIXME: language; what value should be here?
 	RELOC_ENTRY = RelocationEntry{
@@ -89,6 +98,74 @@ type Coff struct {
 	Relocations []RelocationEntry
 	Symbols     []Symbol
 	StringsHeader
+	Strings     []Sizer
+}
+
+func NewDATA() *Coff {
+	return &Coff{
+		pe.FileHeader{
+			Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
+			NumberOfSections:     1,      // .data
+			TimeDateStamp:        0,
+			NumberOfSymbols:      1,      // starting only with '.data', will increase
+			SizeOfOptionalHeader: 0,
+			Characteristics:      0x0104, //FIXME: copied from .rsrc, find out what should be here and why
+		},
+		pe.SectionHeader32{
+			Name:            STRING_DATA,
+			Characteristics: 0x40000040, // "INITIALIZED_DATA MEM_READ" ?
+		},
+
+		// "directory hierarchy" of .rsrc section; empty for .data function
+		Dir{},
+		[]DataEntry{},
+
+		[]Sizer{},
+
+		[]RelocationEntry{},
+
+		[]Symbol{Symbol{
+			Name:           STRING_DATA,
+			Value:          0,
+			SectionNumber:  1,
+			Type:           0, // FIXME: wtf?
+			StorageClass:   3, // FIXME: is it ok? and uint8? and what does the value mean?
+			AuxiliaryCount: 0, // FIXME: wtf?
+		}},
+
+		StringsHeader{
+			Length: uint32(binary.Size(StringsHeader{})), // empty strings table for now -- but we must still show size of the table's header...
+		},
+		[]Sizer{},
+	}
+}
+
+//NOTE: only usable for Coff created using NewDATA
+//NOTE: symbol names must be probably >8 characters long
+//NOTE: symbol names should not contain embedded zeroes
+func (coff *Coff) AddData(beginsymbol, endsymbol string, data Sizer) {
+	coff.addSymbol(beginsymbol)
+	coff.addSymbol(endsymbol)
+	coff.Data = append(coff.Data, data)
+}
+
+// addSymbol appends a symbol to Coff.Symbols and to Coff.Strings.
+//NOTE: symbol s must be probably >8 characters long
+//NOTE: symbol s should not contain embedded zeroes
+func (coff *Coff) addSymbol(s string) {
+	buf := strings.NewReader(s + "\000") // ASCIIZ
+	coff.Strings = append(coff.Strings, io.NewSectionReader(buf, 0, int64(len(s)+1)))
+	
+	coff.Symbols = append(coff.Symbols, Symbol{
+		//Name: // will be filled in Freeze
+		//Value: // as above
+		SectionNumber: 1,
+		Type: DT_PTR<<4 | T_UCHAR, // unsigned char* // (?) or use void* ? T_VOID=1
+		StorageClass: 2, // 2=C_EXT, or 5=C_EXTDEF ?
+		AuxiliaryCount: 0,
+	})
+	
+	coff.Relocations = append(coff.Relocations, RELOC_ENTRY)
 }
 
 func NewRSRC() *Coff {
@@ -126,10 +203,12 @@ func NewRSRC() *Coff {
 		StringsHeader{
 			Length: uint32(binary.Size(StringsHeader{})), // empty strings table -- but we must still show size of the table's header...
 		},
+		[]Sizer{},
 	}
 }
 
 //NOTE: function assumes that 'id' is increasing on each entry
+//NOTE: only usable for Coff created using NewRSRC
 func (coff *Coff) AddResource(kind uint32, id uint16, data Sizer) {
 	coff.Relocations = append(coff.Relocations, RELOC_ENTRY)
 	coff.SectionHeader32.NumberOfRelocations++
@@ -171,6 +250,75 @@ func (coff *Coff) AddResource(kind uint32, id uint16, data Sizer) {
 
 // Freeze fills in some important offsets in resulting file.
 func (coff *Coff) Freeze() {
+	switch coff.SectionHeader32.Name{
+	case	STRING_RSRC:
+		coff.freezeRSRC()
+	case STRING_DATA:
+		coff.freezeDATA()
+	}
+}
+
+func (coff *Coff) freezeCommon1(path string, offset, diroff uint32) (newdiroff uint32) {
+	switch path {
+	case "/Dir":
+		coff.SectionHeader32.PointerToRawData = offset
+		diroff = offset
+	case "/Relocations":
+		coff.SectionHeader32.PointerToRelocations = offset
+		coff.SectionHeader32.SizeOfRawData = offset - diroff
+	case "/Symbols":
+		coff.FileHeader.PointerToSymbolTable = offset
+	}
+	return diroff
+}
+
+func freezeCommon2(v reflect.Value, offset *uint32) error {
+	if binutil.Plain(v.Kind()) {
+		*offset += uint32(binary.Size(v.Interface())) // TODO: change to v.Type().Size() ?
+		return nil
+	}
+	vv, ok := v.Interface().(Sizer)
+	if ok {
+		*offset += uint32(vv.Size())
+		return binutil.WALK_SKIP
+	}
+	return nil
+}
+
+func (coff *Coff) freezeDATA() {
+	var offset, diroff, stringsoff uint32
+	binutil.Walk(coff, func(v reflect.Value, path string) error {
+		diroff = coff.freezeCommon1(path, offset, diroff)
+		
+		RE := regexp.MustCompile
+		const N = `\[(\d+)\]`
+		m := matcher{}
+	//TODO: adjust symbol pointers
+	//TODO: add relocations
+	//TODO: fill Symbols.Name, .Value
+		switch {
+		case m.Find(path, RE("^/Data"+N+"$")):
+			n := m[0]
+			sz := uint32(coff.Data[n].Size())
+			coff.Symbols[1+2*n].Value = offset-diroff // FIXME: is it ok?
+			coff.Symbols[1+2*n+1].Value = offset-diroff+sz // FIXME: is it ok?
+		case m.Find(path, RE("^/Symbols"+N+"/Value$")):
+			n := m[0]
+			if n==0 {
+				break
+			}
+			coff.Relocations[n-1].RVA = offset-diroff
+		case path=="/Strings":
+			stringsoff = offset
+		case m.Find(path, RE("^/Strings"+N+"$")):
+			binary.LittleEndian.PutUint32(coff.Symbols[m[0]+1].Name[4:8], offset-stringsoff)
+		}
+		
+		return freezeCommon2(v, &offset)
+	})
+}
+
+func (coff *Coff) freezeRSRC() {
 	leafwalker := make(chan *DirEntry)
 	go func() {
 		for _, dir1 := range coff.Dir.Dirs { // resource type
@@ -184,16 +332,8 @@ func (coff *Coff) Freeze() {
 
 	var offset, diroff uint32
 	binutil.Walk(coff, func(v reflect.Value, path string) error {
-		switch path {
-		case "/Dir":
-			coff.SectionHeader32.PointerToRawData = offset
-			diroff = offset
-		case "/Relocations":
-			coff.SectionHeader32.PointerToRelocations = offset
-			coff.SectionHeader32.SizeOfRawData = offset - diroff
-		case "/Symbols":
-			coff.FileHeader.PointerToSymbolTable = offset
-		}
+		diroff = coff.freezeCommon1(path, offset, diroff)
+
 		RE := regexp.MustCompile
 		const N = `\[(\d+)\]`
 		m := matcher{}
@@ -211,16 +351,7 @@ func (coff *Coff) Freeze() {
 			coff.DataEntries[m[0]].OffsetToData = offset - diroff
 		}
 
-		if binutil.Plain(v.Kind()) {
-			offset += uint32(binary.Size(v.Interface())) // TODO: change to v.Type().Size() ?
-			return nil
-		}
-		vv, ok := v.Interface().(Sizer)
-		if ok {
-			offset += uint32(vv.Size())
-			return binutil.WALK_SKIP
-		}
-		return nil
+		return freezeCommon2(v, &offset)
 	})
 }
 
