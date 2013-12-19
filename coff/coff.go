@@ -154,7 +154,10 @@ func (coff *Coff) AddData(beginsymbol, endsymbol string, data Sizer) {
 //NOTE: symbol s should not contain embedded zeroes
 func (coff *Coff) addSymbol(s string) {
 	buf := strings.NewReader(s + "\000") // ASCIIZ
-	coff.Strings = append(coff.Strings, io.NewSectionReader(buf, 0, int64(len(s)+1)))
+	r := io.NewSectionReader(buf, 0, int64(len(s)+1))
+	coff.Strings = append(coff.Strings, r)
+
+	coff.StringsHeader.Length += uint32(r.Size())
 
 	coff.Symbols = append(coff.Symbols, Symbol{
 		//Name: // will be filled in Freeze

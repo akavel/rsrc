@@ -77,7 +77,7 @@ func rundata(fnamedata, fnameout string) error {
 
 	symname := fmt.Sprintf("_rsrc_%04x", rand.Uint32())
 
-	coff := coff.NewDATA()
+	coff := coff.NewRDATA()
 	coff.AddData(symname+"_begin", symname+"_end", dat)
 	err = write(coff, fnameout)
 	if err != nil {
