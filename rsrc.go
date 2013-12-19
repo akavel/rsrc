@@ -37,6 +37,7 @@ type GRPICONDIRENTRY struct {
 
 func main() {
 	//TODO: allow in options advanced specification of multiple resources, as a tree (json?)
+	//FIXME: verify that data file size doesn't exceed uint32 max value
 	var fnamein, fnameico, fnamedata, fnameout string
 	flags := flag.NewFlagSet("", flag.ContinueOnError)
 	flags.StringVar(&fnamein, "manifest", "", "path to a Windows manifest file to embed")
@@ -79,6 +80,7 @@ func rundata(fnamedata, fnameout string) error {
 
 	coff := coff.NewRDATA()
 	coff.AddData(symname+"_begin", symname+"_end", dat)
+	coff.Freeze()
 	err = write(coff, fnameout)
 	if err != nil {
 		return err

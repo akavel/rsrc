@@ -147,6 +147,7 @@ func (coff *Coff) AddData(beginsymbol, endsymbol string, data Sizer) {
 	coff.addSymbol(beginsymbol)
 	coff.addSymbol(endsymbol)
 	coff.Data = append(coff.Data, data)
+	coff.SectionHeader32.SizeOfRawData += uint32(data.Size())
 }
 
 // addSymbol appends a symbol to Coff.Symbols and to Coff.Strings.
