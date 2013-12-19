@@ -44,13 +44,13 @@ func main() {
 	flags.StringVar(&fnamedata, "data", "", "path to raw data file to embed")
 	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
 	_ = flags.Parse(os.Args[1:])
-	if fnamein == "" {
+	if fnamein == "" && fnamedata == "" {
 		fmt.Fprintf(os.Stderr, "USAGE: %s -manifest FILE.exe.manifest [-ico FILE.ico] [-o FILE.syso]\n"+
 			"       %s -data FILE.dat [-o FILE.syso] > embed.c\n"+
 			"Generates a .syso file with specified resources embedded in .rsrc section,\n"+
 			"aimed for consumption by Go linker when building Win32 excecutables.\n"+
 			"OPTIONS:\n",
-			os.Args[0])
+			os.Args[0], os.Args[0])
 		flags.PrintDefaults()
 		os.Exit(1)
 	}

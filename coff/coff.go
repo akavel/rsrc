@@ -3,12 +3,12 @@ package coff
 import (
 	"debug/pe"
 	"encoding/binary"
+	"io"
 	"reflect"
 	"regexp"
 	"sort"
-	"strings"
 	"strconv"
-	"io"
+	"strings"
 
 	"github.com/akavel/rsrc/binutil"
 )
@@ -68,13 +68,13 @@ const (
 
 // http://www.delorie.com/djgpp/doc/coff/symtab.html
 const (
-	DT_PTR = 1
+	DT_PTR  = 1
 	T_UCHAR = 12
 )
 
 var (
-	STRING_RSRC = [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0}
-	STRING_DATA = [8]byte{'.', 'd', 'a', 't', 'a', 0, 0, 0}
+	STRING_RSRC  = [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0}
+	STRING_RDATA = [8]byte{'.', 'r', 'd', 'a', 't', 'a', 0, 0}
 
 	LANG_ENTRY  = DirEntry{NameOrId: 0x0409} //FIXME: language; what value should be here?
 	RELOC_ENTRY = RelocationEntry{
@@ -98,21 +98,21 @@ type Coff struct {
 	Relocations []RelocationEntry
 	Symbols     []Symbol
 	StringsHeader
-	Strings     []Sizer
+	Strings []Sizer
 }
 
-func NewDATA() *Coff {
+func NewRDATA() *Coff {
 	return &Coff{
 		pe.FileHeader{
 			Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
 			NumberOfSections:     1,      // .data
 			TimeDateStamp:        0,
-			NumberOfSymbols:      1,      // starting only with '.data', will increase
+			NumberOfSymbols:      1, // starting only with '.data', will increase
 			SizeOfOptionalHeader: 0,
 			Characteristics:      0x0104, //FIXME: copied from .rsrc, find out what should be here and why
 		},
 		pe.SectionHeader32{
-			Name:            STRING_DATA,
+			Name:            STRING_RDATA,
 			Characteristics: 0x40000040, // "INITIALIZED_DATA MEM_READ" ?
 		},
 
@@ -125,7 +125,7 @@ func NewDATA() *Coff {
 		[]RelocationEntry{},
 
 		[]Symbol{Symbol{
-			Name:           STRING_DATA,
+			Name:           STRING_RDATA,
 			Value:          0,
 			SectionNumber:  1,
 			Type:           0, // FIXME: wtf?
@@ -140,7 +140,7 @@ func NewDATA() *Coff {
 	}
 }
 
-//NOTE: only usable for Coff created using NewDATA
+//NOTE: only usable for Coff created using NewRDATA
 //NOTE: symbol names must be probably >8 characters long
 //NOTE: symbol names should not contain embedded zeroes
 func (coff *Coff) AddData(beginsymbol, endsymbol string, data Sizer) {
@@ -155,16 +155,16 @@ func (coff *Coff) AddData(beginsymbol, endsymbol string, data Sizer) {
 func (coff *Coff) addSymbol(s string) {
 	buf := strings.NewReader(s + "\000") // ASCIIZ
 	coff.Strings = append(coff.Strings, io.NewSectionReader(buf, 0, int64(len(s)+1)))
-	
+
 	coff.Symbols = append(coff.Symbols, Symbol{
 		//Name: // will be filled in Freeze
 		//Value: // as above
-		SectionNumber: 1,
-		Type: DT_PTR<<4 | T_UCHAR, // unsigned char* // (?) or use void* ? T_VOID=1
-		StorageClass: 2, // 2=C_EXT, or 5=C_EXTDEF ?
+		SectionNumber:  1,
+		Type:           DT_PTR<<4 | T_UCHAR, // unsigned char* // (?) or use void* ? T_VOID=1
+		StorageClass:   2,                   // 2=C_EXT, or 5=C_EXTDEF ?
 		AuxiliaryCount: 0,
 	})
-	
+
 	coff.Relocations = append(coff.Relocations, RELOC_ENTRY)
 }
 
@@ -250,11 +250,11 @@ func (coff *Coff) AddResource(kind uint32, id uint16, data Sizer) {
 
 // Freeze fills in some important offsets in resulting file.
 func (coff *Coff) Freeze() {
-	switch coff.SectionHeader32.Name{
-	case	STRING_RSRC:
+	switch coff.SectionHeader32.Name {
+	case STRING_RSRC:
 		coff.freezeRSRC()
-	case STRING_DATA:
-		coff.freezeDATA()
+	case STRING_RDATA:
+		coff.freezeRDATA()
 	}
 }
 
@@ -285,35 +285,35 @@ func freezeCommon2(v reflect.Value, offset *uint32) error {
 	return nil
 }
 
-func (coff *Coff) freezeDATA() {
+func (coff *Coff) freezeRDATA() {
 	var offset, diroff, stringsoff uint32
 	binutil.Walk(coff, func(v reflect.Value, path string) error {
 		diroff = coff.freezeCommon1(path, offset, diroff)
-		
+
 		RE := regexp.MustCompile
 		const N = `\[(\d+)\]`
 		m := matcher{}
-	//TODO: adjust symbol pointers
-	//TODO: add relocations
-	//TODO: fill Symbols.Name, .Value
+		//TODO: adjust symbol pointers
+		//TODO: add relocations
+		//TODO: fill Symbols.Name, .Value
 		switch {
 		case m.Find(path, RE("^/Data"+N+"$")):
 			n := m[0]
 			sz := uint32(coff.Data[n].Size())
-			coff.Symbols[1+2*n].Value = offset-diroff // FIXME: is it ok?
-			coff.Symbols[1+2*n+1].Value = offset-diroff+sz // FIXME: is it ok?
+			coff.Symbols[1+2*n].Value = offset - diroff        // FIXME: is it ok?
+			coff.Symbols[1+2*n+1].Value = offset - diroff + sz // FIXME: is it ok?
 		case m.Find(path, RE("^/Symbols"+N+"/Value$")):
 			n := m[0]
-			if n==0 {
+			if n == 0 {
 				break
 			}
-			coff.Relocations[n-1].RVA = offset-diroff
-		case path=="/Strings":
+			coff.Relocations[n-1].RVA = offset - diroff
+		case path == "/Strings":
 			stringsoff = offset
 		case m.Find(path, RE("^/Strings"+N+"$")):
 			binary.LittleEndian.PutUint32(coff.Symbols[m[0]+1].Name[4:8], offset-stringsoff)
 		}
-		
+
 		return freezeCommon2(v, &offset)
 	})
 }
