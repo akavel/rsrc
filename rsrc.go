@@ -77,6 +77,7 @@ func rundata(fnamedata, fnameout string) error {
 	}
 	defer dat.Close()
 
+	//FIXME: initialize the randomizer, or generate some other way (hash of data? arg.?)
 	symname := fmt.Sprintf("_rsrc_%04x", rand.Uint32())
 
 	coff := coff.NewRDATA()

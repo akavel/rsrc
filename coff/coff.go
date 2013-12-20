@@ -45,6 +45,8 @@ type RelocationEntry struct {
 	Type        uint16
 }
 
+type Auxiliary [18]byte
+
 type Symbol struct {
 	Name           [8]byte
 	Value          uint32
@@ -52,6 +54,7 @@ type Symbol struct {
 	Type           uint16
 	StorageClass   uint8
 	AuxiliaryCount uint8
+	Auxiliaries    []Auxiliary
 }
 
 type StringsHeader struct {
@@ -107,9 +110,9 @@ func NewRDATA() *Coff {
 			Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
 			NumberOfSections:     1,      // .data
 			TimeDateStamp:        0,
-			NumberOfSymbols:      1, // starting only with '.data', will increase
+			NumberOfSymbols:      2, // starting only with '.rdata', will increase; must include auxiliaries, apparently
 			SizeOfOptionalHeader: 0,
-			Characteristics:      0x0104, //FIXME: copied from .rsrc, find out what should be here and why
+			Characteristics:      0x0105, //http://www.delorie.com/djgpp/doc/coff/filhdr.html
 		},
 		pe.SectionHeader32{
 			Name:            STRING_RDATA,
@@ -128,9 +131,10 @@ func NewRDATA() *Coff {
 			Name:           STRING_RDATA,
 			Value:          0,
 			SectionNumber:  1,
-			Type:           0, // FIXME: wtf?
-			StorageClass:   3, // FIXME: is it ok? and uint8? and what does the value mean?
-			AuxiliaryCount: 0, // FIXME: wtf?
+			Type:           0,               // FIXME: wtf?
+			StorageClass:   3,               // FIXME: is it ok? and uint8? and what does the value mean?
+			AuxiliaryCount: 1,
+			Auxiliaries:    []Auxiliary{{}}, //http://www6.cptec.inpe.br/sx4/sx4man2/g1af01e/chap5.html
 		}},
 
 		StringsHeader{
@@ -153,6 +157,8 @@ func (coff *Coff) AddData(symbol string, data Sizer) {
 //NOTE: symbol s must be probably >8 characters long
 //NOTE: symbol s should not contain embedded zeroes
 func (coff *Coff) addSymbol(s string) {
+	coff.FileHeader.NumberOfSymbols++
+
 	buf := strings.NewReader(s + "\000") // ASCIIZ
 	r := io.NewSectionReader(buf, 0, int64(len(s)+1))
 	coff.Strings = append(coff.Strings, r)
@@ -300,6 +306,8 @@ func (coff *Coff) freezeRDATA() {
 		case m.Find(path, RE("^/Data"+N+"$")):
 			n := m[0]
 			coff.Symbols[1+n].Value = offset - diroff // FIXME: is it ok?
+			sz := uint64(coff.Data[n].Size())
+			binary.LittleEndian.PutUint64(coff.Symbols[0].Auxiliaries[0][0:8], binary.LittleEndian.Uint64(coff.Symbols[0].Auxiliaries[0][0:8])+sz)
 		case path == "/StringsHeader":
 			stringsoff = offset
 		case m.Find(path, RE("^/Strings"+N+"$")):
@@ -308,6 +316,7 @@ func (coff *Coff) freezeRDATA() {
 
 		return freezeCommon2(v, &offset)
 	})
+	coff.SectionHeader32.PointerToRelocations = 0
 }
 
 func (coff *Coff) freezeRSRC() {
