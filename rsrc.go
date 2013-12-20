@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"reflect"
 	"strings"
@@ -77,8 +76,8 @@ func rundata(fnamedata, fnameout string) error {
 	}
 	defer dat.Close()
 
-	//FIXME: initialize the randomizer, or generate some other way (hash of data? arg.?)
-	symname := fmt.Sprintf("_rsrc_%04x", rand.Uint32())
+	//FIXME: maybe generate some other way (hash of data? arg.?)
+	symname := fmt.Sprintf("_rsrc_%04x", fnamedata)
 
 	coff := coff.NewRDATA()
 	coff.AddData(symname+"_begin", dat)
@@ -90,6 +89,16 @@ func rundata(fnamedata, fnameout string) error {
 	}
 
 	//FIXME: output a .c file
+	fmt.Println(strings.Replace(`/* func getNAME() []byte */
+#include "runtime.h"
+
+extern byte NAME_begin[], NAME_end;
+
+void ·getNAME(Slice a) {
+  a.array = NAME_begin;
+  a.len = a.cap = &NAME_end - NAME_begin;
+  FLUSH(&a);
+}`, "NAME", symname, -1))
 
 	return nil
 }

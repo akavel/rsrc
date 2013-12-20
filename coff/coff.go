@@ -131,8 +131,8 @@ func NewRDATA() *Coff {
 			Name:           STRING_RDATA,
 			Value:          0,
 			SectionNumber:  1,
-			Type:           0,               // FIXME: wtf?
-			StorageClass:   3,               // FIXME: is it ok? and uint8? and what does the value mean?
+			Type:           0, // FIXME: wtf?
+			StorageClass:   3, // FIXME: is it ok? and uint8? and what does the value mean?
 			AuxiliaryCount: 1,
 			Auxiliaries:    []Auxiliary{{}}, //http://www6.cptec.inpe.br/sx4/sx4man2/g1af01e/chap5.html
 		}},
