@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"github.com/akavel/rsrc/binutil"
@@ -45,9 +46,9 @@ func main() {
 	flags.StringVar(&fnamedata, "data", "", "path to raw data file to embed")
 	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
 	_ = flags.Parse(os.Args[1:])
-	if fnamein == "" && fnamedata == "" {
+	if fnamein == "" && (fnamedata == "" || fnameout == "") {
 		fmt.Fprintf(os.Stderr, "USAGE: %s -manifest FILE.exe.manifest [-ico FILE.ico] [-o FILE.syso]\n"+
-			"       %s -data FILE.dat [-o FILE.syso] > embed.c\n"+
+			"       %s -data FILE.dat -o FILE.syso > FILE.c\n"+
 			"Generates a .syso file with specified resources embedded in .rsrc section,\n"+
 			"aimed for consumption by Go linker when building Win32 excecutables.\n"+
 			"OPTIONS:\n",
@@ -70,18 +71,27 @@ func main() {
 }
 
 func rundata(fnamedata, fnameout string) error {
+	if !strings.HasSuffix(fnameout, ".syso") {
+		return fmt.Errorf("Output file name '%s' must end with '.syso'", fnameout)
+	}
+	symname := strings.TrimSuffix(fnameout, ".syso")
+	ok, err := regexp.MatchString(`^[a-z0-9_]+$`, symname)
+	if err != nil {
+		return fmt.Errorf("Internal error: %s", err)
+	}
+	if !ok {
+		return fmt.Errorf("Output file name '%s' must be composed of only lowercase letters (a-z), digits (0-9) and underscore (_)", fnameout)
+	}
+
 	dat, err := binutil.SizedOpen(fnamedata)
 	if err != nil {
 		return fmt.Errorf("Error opening data file '%s': %s", fnamedata, err)
 	}
 	defer dat.Close()
 
-	//FIXME: maybe generate some other way (hash of data? arg.?)
-	symname := fmt.Sprintf("_rsrc_%04x", fnamedata)
-
 	coff := coff.NewRDATA()
-	coff.AddData(symname+"_begin", dat)
-	coff.AddData(symname+"_end", io.NewSectionReader(strings.NewReader("\000\000"), 0, 2)) // TODO: why? copied from as-generated
+	coff.AddData("_brsrc_"+symname, dat)
+	coff.AddData("_ersrc_"+symname, io.NewSectionReader(strings.NewReader("\000\000"), 0, 2)) // TODO: why? copied from as-generated
 	coff.Freeze()
 	err = write(coff, fnameout)
 	if err != nil {
@@ -89,14 +99,13 @@ func rundata(fnamedata, fnameout string) error {
 	}
 
 	//FIXME: output a .c file
-	fmt.Println(strings.Replace(`/* func getNAME() []byte */
-#include "runtime.h"
+	fmt.Println(strings.Replace(`#include "runtime.h"
+extern byte _brsrc_NAME[], _ersrc_NAME;
 
-extern byte NAME_begin[], NAME_end;
-
-void ·getNAME(Slice a) {
-  a.array = NAME_begin;
-  a.len = a.cap = &NAME_end - NAME_begin;
+/* func get_NAME() []byte */
+void ·get_NAME(Slice a) {
+  a.array = _brsrc_NAME;
+  a.len = a.cap = &_ersrc_NAME - _brsrc_NAME;
   FLUSH(&a);
 }`, "NAME", symname, -1))
 
