@@ -36,6 +36,24 @@ type GRPICONDIRENTRY struct {
 	Id uint16
 }
 
+var usage = `USAGE:
+
+%s -manifest FILE.exe.manifest [-ico FILE.ico] [-o FILE.syso]
+  Generates a .syso file with specified resources embedded in .rsrc section,
+  aimed for consumption by Go linker when building Win32 excecutables.
+
+%s -data FILE.dat -o FILE.syso > FILE.c
+  Generates a .syso file with specified opaque binary blob embedded,
+  together with related .c file making it possible to access from Go code.
+  Theoretically cross-platform, but reportedly cannot compile together with cgo.
+
+The generated *.syso and *.c files will be automatically recognized by 'go build'
+command and linked into an executable/library, as long as there are any *.go files
+in the same directory.
+
+OPTIONS:
+`
+
 func main() {
 	//TODO: allow in options advanced specification of multiple resources, as a tree (json?)
 	//FIXME: verify that data file size doesn't exceed uint32 max value
@@ -46,13 +64,8 @@ func main() {
 	flags.StringVar(&fnamedata, "data", "", "path to raw data file to embed")
 	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
 	_ = flags.Parse(os.Args[1:])
-	if fnamein == "" && (fnamedata == "" || fnameout == "") {
-		fmt.Fprintf(os.Stderr, "USAGE: %s -manifest FILE.exe.manifest [-ico FILE.ico] [-o FILE.syso]\n"+
-			"       %s -data FILE.dat -o FILE.syso > FILE.c\n"+
-			"Generates a .syso file with specified resources embedded in .rsrc section,\n"+
-			"aimed for consumption by Go linker when building Win32 excecutables.\n"+
-			"OPTIONS:\n",
-			os.Args[0], os.Args[0])
+	if fnamein == "" && fnamedata == "" {
+		fmt.Fprintf(os.Stderr, usage, os.Args[0], os.Args[0])
 		flags.PrintDefaults()
 		os.Exit(1)
 	}
