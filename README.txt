@@ -13,7 +13,7 @@ rsrc.exe -data FILE.dat -o FILE.syso > FILE.c
   together with related .c file making it possible to access from Go code.
   Theoretically cross-platform, but reportedly cannot compile together with cgo.
 
-The generated *.syso and *.c files will be automatically recognized by 'go build'
+The generated *.syso and *.c files should get automatically recognized by 'go build'
 command and linked into an executable/library, as long as there are any *.go files
 in the same directory.
 
