@@ -134,46 +134,47 @@ func run(fnamein, fnameico, fnameout string) error {
 
 	var icons []ico.ICONDIRENTRY
 	var iconsf *os.File
-	if fnameico != "" {
-		iconsf, err = os.Open(fnameico)
-		if err != nil {
-			return err
-		}
-		defer iconsf.Close()
-		icons, err = ico.DecodeHeaders(iconsf)
-		if err != nil {
-			return err
-		}
-	}
-
 	newid := make(chan uint16)
 	go func() {
 		for i := uint16(1); ; i++ {
 			newid <- i
 		}
 	}()
-
 	coff := coff.NewRSRC()
+	id := <-newid
+	coff.AddResource(RT_MANIFEST, id, manifest)
+	println("Manifest ID : " , id)
+	if fnameico != "" {
+		for _,fnameicosingle := range strings.Split(fnameico, ","){
+			iconsf, err = os.Open(fnameicosingle)
+			if err != nil {
+				return err
+			}
+			icons, err = ico.DecodeHeaders(iconsf)
+			if err != nil {
+				return err
+			}
 
-	coff.AddResource(RT_MANIFEST, <-newid, manifest)
+			if len(icons) > 0 {
+				// RT_ICONs
+				group := GRPICONDIR{ICONDIR: ico.ICONDIR{
+					Reserved: 0, // magic num.
+					Type:     1, // magic num.
+					Count:    uint16(len(icons)),
+				}}
+				for _, icon := range icons {
+					id := <-newid
+					r := io.NewSectionReader(iconsf, int64(icon.ImageOffset), int64(icon.BytesInRes))
+					coff.AddResource(RT_ICON, id, r)
+					group.Entries = append(group.Entries, GRPICONDIRENTRY{icon.IconDirEntryCommon, id})
+				}
+				id = <-newid
+				coff.AddResource(RT_GROUP_ICON, id, group)
+				println("Icon ",fnameicosingle," ID : " , id)
+			}
+			defer iconsf.Close()
 
-	if len(icons) > 0 {
-		// RT_ICONs
-		group := GRPICONDIR{ICONDIR: ico.ICONDIR{
-			Reserved: 0, // magic num.
-			Type:     1, // magic num.
-			Count:    uint16(len(icons)),
-		}}
-		for _, icon := range icons {
-			id := <-newid
-			r := io.NewSectionReader(iconsf, int64(icon.ImageOffset), int64(icon.BytesInRes))
-
-			coff.AddResource(RT_ICON, id, r)
-			group.Entries = append(group.Entries, GRPICONDIRENTRY{icon.IconDirEntryCommon, id})
 		}
-
-		// RT_GROUP_ICON
-		coff.AddResource(RT_GROUP_ICON, <-newid, group)
 	}
 
 	coff.Freeze()
