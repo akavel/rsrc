@@ -19,9 +19,18 @@ there are any *.go files in the same directory.
 
 OPTIONS:
   -data="": path to raw data file to embed
-  -ico="": path to .ico file to embed
+  -ico="": path to .ico file to embed , if you want to add more icons ,use a comma(,) to seperate the files ,such as a.ico,b.ico
   -manifest="": path to a Windows manifest file to embed
   -o="rsrc.syso": name of output COFF (.res or .syso) file
+
+OUTPUTS:
+This tool would print the ID you added to the resource file . This is a example outputs :
+ID :   1 ,Add to resource , file : t005.exe.manifest
+ID :   2 ,Add to resource , file : a.ico.0
+ID :   3 ,Add to resource , file : a.ico
+ID :   4 ,Add to resource , file : x.ico.0
+ID :   5 ,Add to resource , file : x.ico
+
 
 Based on ideas presented by Minux.
 
