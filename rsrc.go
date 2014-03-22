@@ -8,6 +8,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/akavel/rsrc/binutil"
@@ -34,6 +35,13 @@ func (group GRPICONDIR) Size() int64 {
 type GRPICONDIRENTRY struct {
 	ico.IconDirEntryCommon
 	Id uint16
+}
+
+type coffres struct {
+	kind uint32
+	id   uint16
+	data coff.Sizer
+	name string
 }
 
 var usage = `USAGE:
@@ -126,25 +134,12 @@ void ·get_NAME(Slice a) {
 }
 
 func run(fnamein, fnameico, fnameout string) error {
+	var crs []coffres
 	manifest, err := binutil.SizedOpen(fnamein)
 	if err != nil {
 		return fmt.Errorf("Error opening manifest file '%s': %s", fnamein, err)
 	}
 	defer manifest.Close()
-
-	var icons []ico.ICONDIRENTRY
-	var iconsf *os.File
-	if fnameico != "" {
-		iconsf, err = os.Open(fnameico)
-		if err != nil {
-			return err
-		}
-		defer iconsf.Close()
-		icons, err = ico.DecodeHeaders(iconsf)
-		if err != nil {
-			return err
-		}
-	}
 
 	newid := make(chan uint16)
 	go func() {
@@ -155,8 +150,35 @@ func run(fnamein, fnameico, fnameout string) error {
 
 	coff := coff.NewRSRC()
 
-	coff.AddResource(RT_MANIFEST, <-newid, manifest)
+	crs = append(crs, coffres{RT_MANIFEST, <-newid, manifest, fnamein})
 
+	if fnameico != "" {
+		for _, fnameicosingle := range strings.Split(fnameico, ",") {
+			iconsf, err := os.Open(fnameicosingle)
+			if err != nil {
+				return err
+			}
+			if err := iconres(fnameicosingle, iconsf, &crs, newid); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, cr := range crs {
+		coff.AddResource(cr.kind, cr.id, cr.data)
+		fmt.Printf("ID : %3d ,Add to resource , file : %s\n", cr.id, cr.name)
+	}
+
+	coff.Freeze()
+
+	return write(coff, fnameout)
+}
+
+func iconres(fnameicosingle string, iconsf *os.File, crs *[]coffres, newid <-chan uint16) (err error) {
+	icons, err := ico.DecodeHeaders(iconsf)
+	if err != nil {
+		return err
+	}
 	if len(icons) > 0 {
 		// RT_ICONs
 		group := GRPICONDIR{ICONDIR: ico.ICONDIR{
@@ -164,21 +186,16 @@ func run(fnamein, fnameico, fnameout string) error {
 			Type:     1, // magic num.
 			Count:    uint16(len(icons)),
 		}}
-		for _, icon := range icons {
-			id := <-newid
+		for n, icon := range icons {
 			r := io.NewSectionReader(iconsf, int64(icon.ImageOffset), int64(icon.BytesInRes))
-
-			coff.AddResource(RT_ICON, id, r)
+			name := fnameicosingle + "." + strconv.Itoa(n)
+			id := <-newid
+			*crs = append(*crs, coffres{RT_ICON, id, r, name})
 			group.Entries = append(group.Entries, GRPICONDIRENTRY{icon.IconDirEntryCommon, id})
 		}
-
-		// RT_GROUP_ICON
-		coff.AddResource(RT_GROUP_ICON, <-newid, group)
+		*crs = append(*crs, coffres{RT_GROUP_ICON, <-newid, group, fnameicosingle})
 	}
-
-	coff.Freeze()
-
-	return write(coff, fnameout)
+	return nil
 }
 
 func write(coff *coff.Coff, fnameout string) error {
