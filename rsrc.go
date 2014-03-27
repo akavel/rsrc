@@ -38,7 +38,7 @@ type GRPICONDIRENTRY struct {
 
 var usage = `USAGE:
 
-%s -manifest FILE.exe.manifest [-ico FILE.ico] [-o FILE.syso]
+%s -manifest FILE.exe.manifest [-ico FILE.ico[,FILE2.ico...]] [-o FILE.syso]
   Generates a .syso file with specified resources embedded in .rsrc section,
   aimed for consumption by Go linker when building Win32 excecutables.
 
@@ -60,7 +60,7 @@ func main() {
 	var fnamein, fnameico, fnamedata, fnameout string
 	flags := flag.NewFlagSet("", flag.ContinueOnError)
 	flags.StringVar(&fnamein, "manifest", "", "path to a Windows manifest file to embed")
-	flags.StringVar(&fnameico, "ico", "", "path to .ico file to embed")
+	flags.StringVar(&fnameico, "ico", "", "comma-separated list of paths to .ico files to embed")
 	flags.StringVar(&fnamedata, "data", "", "path to raw data file to embed")
 	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
 	_ = flags.Parse(os.Args[1:])
@@ -132,8 +132,6 @@ func run(fnamein, fnameico, fnameout string) error {
 	}
 	defer manifest.Close()
 
-	var icons []ico.ICONDIRENTRY
-	var iconsf *os.File
 	newid := make(chan uint16)
 	go func() {
 		for i := uint16(1); ; i++ {
@@ -143,43 +141,52 @@ func run(fnamein, fnameico, fnameout string) error {
 	coff := coff.NewRSRC()
 	id := <-newid
 	coff.AddResource(RT_MANIFEST, id, manifest)
-	println("Manifest ID : ", id)
+	fmt.Println("Manifest ID: ", id)
 	if fnameico != "" {
 		for _, fnameicosingle := range strings.Split(fnameico, ",") {
-			iconsf, err = os.Open(fnameicosingle)
+			err = addicon(coff, fnameicosingle, newid)
 			if err != nil {
 				return err
 			}
-			icons, err = ico.DecodeHeaders(iconsf)
-			if err != nil {
-				return err
-			}
-
-			if len(icons) > 0 {
-				// RT_ICONs
-				group := GRPICONDIR{ICONDIR: ico.ICONDIR{
-					Reserved: 0, // magic num.
-					Type:     1, // magic num.
-					Count:    uint16(len(icons)),
-				}}
-				for _, icon := range icons {
-					id := <-newid
-					r := io.NewSectionReader(iconsf, int64(icon.ImageOffset), int64(icon.BytesInRes))
-					coff.AddResource(RT_ICON, id, r)
-					group.Entries = append(group.Entries, GRPICONDIRENTRY{icon.IconDirEntryCommon, id})
-				}
-				id = <-newid
-				coff.AddResource(RT_GROUP_ICON, id, group)
-				println("Icon ", fnameicosingle, " ID : ", id)
-			}
-			defer iconsf.Close()
-
 		}
 	}
 
 	coff.Freeze()
 
 	return write(coff, fnameout)
+}
+
+func addicon(coff *coff.Coff, fnameicosingle string, newid <-chan uint16) error {
+	iconsf, err := os.Open(fnameicosingle)
+	if err != nil {
+		return err
+	}
+	defer iconsf.Close()
+
+	icons, err := ico.DecodeHeaders(iconsf)
+	if err != nil {
+		return err
+	}
+
+	if len(icons) > 0 {
+		// RT_ICONs
+		group := GRPICONDIR{ICONDIR: ico.ICONDIR{
+			Reserved: 0, // magic num.
+			Type:     1, // magic num.
+			Count:    uint16(len(icons)),
+		}}
+		for _, icon := range icons {
+			id := <-newid
+			r := io.NewSectionReader(iconsf, int64(icon.ImageOffset), int64(icon.BytesInRes))
+			coff.AddResource(RT_ICON, id, r)
+			group.Entries = append(group.Entries, GRPICONDIRENTRY{icon.IconDirEntryCommon, id})
+		}
+		id := <-newid
+		coff.AddResource(RT_GROUP_ICON, id, group)
+		fmt.Println("Icon ", fnameicosingle, " ID: ", id)
+	}
+
+	return nil
 }
 
 func write(coff *coff.Coff, fnameout string) error {
