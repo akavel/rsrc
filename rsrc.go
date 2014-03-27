@@ -161,7 +161,7 @@ func addicon(coff *coff.Coff, fnameicosingle string, newid <-chan uint16) error 
 	if err != nil {
 		return err
 	}
-	defer iconsf.Close()
+	//defer iconsf.Close() don't defer, files will be closed by OS when app closes
 
 	icons, err := ico.DecodeHeaders(iconsf)
 	if err != nil {
