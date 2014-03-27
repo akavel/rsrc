@@ -143,9 +143,9 @@ func run(fnamein, fnameico, fnameout string) error {
 	coff := coff.NewRSRC()
 	id := <-newid
 	coff.AddResource(RT_MANIFEST, id, manifest)
-	println("Manifest ID : " , id)
+	println("Manifest ID : ", id)
 	if fnameico != "" {
-		for _,fnameicosingle := range strings.Split(fnameico, ","){
+		for _, fnameicosingle := range strings.Split(fnameico, ",") {
 			iconsf, err = os.Open(fnameicosingle)
 			if err != nil {
 				return err
@@ -170,7 +170,7 @@ func run(fnamein, fnameico, fnameout string) error {
 				}
 				id = <-newid
 				coff.AddResource(RT_GROUP_ICON, id, group)
-				println("Icon ",fnameicosingle," ID : " , id)
+				println("Icon ", fnameicosingle, " ID : ", id)
 			}
 			defer iconsf.Close()
 
