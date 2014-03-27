@@ -4,7 +4,7 @@ INSTALL: go get github.com/akavel/rsrc
 
 USAGE:
 
-rsrc -manifest FILE.exe.manifest [-ico FILE.ico] [-o FILE.syso]
+rsrc -manifest FILE.exe.manifest [-ico FILE.ico[,FILE2.ico...]] [-o FILE.syso]
   Generates a .syso file with specified resources embedded in .rsrc section,
   aimed for consumption by Go linker when building Win32 excecutables.
 
@@ -19,7 +19,7 @@ there are any *.go files in the same directory.
 
 OPTIONS:
   -data="": path to raw data file to embed
-  -ico="": path to .ico file to embed
+  -ico="": comma-separated list of paths to .ico files to embed
   -manifest="": path to a Windows manifest file to embed
   -o="rsrc.syso": name of output COFF (.res or .syso) file
 
@@ -33,6 +33,6 @@ TODO MAYBE/LATER:
 - fix or remove FIXMEs
 
 LICENSE: MIT
-  Copyright 2013 Mateusz Czapliński <czapkofan@gmail.com>
+  Copyright 2013-2014 The rsrc Authors.
 
 http://github.com/akavel/rsrc
