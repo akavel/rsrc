@@ -4,7 +4,7 @@ INSTALL: go get github.com/akavel/rsrc
 
 USAGE:
 
-rsrc -manifest FILE.exe.manifest [-ico FILE.ico[,FILE2.ico...]] [-o FILE.syso]
+rsrc [-manifest FILE.exe.manifest] [-ico FILE.ico[,FILE2.ico...]] -o FILE.syso
   Generates a .syso file with specified resources embedded in .rsrc section,
   aimed for consumption by Go linker when building Win32 excecutables.
 

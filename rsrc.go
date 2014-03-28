@@ -38,7 +38,7 @@ type GRPICONDIRENTRY struct {
 
 var usage = `USAGE:
 
-%s -manifest FILE.exe.manifest [-ico FILE.ico[,FILE2.ico...]] [-o FILE.syso]
+%s [-manifest FILE.exe.manifest] [-ico FILE.ico[,FILE2.ico...]] -o FILE.syso
   Generates a .syso file with specified resources embedded in .rsrc section,
   aimed for consumption by Go linker when building Win32 excecutables.
 
@@ -64,7 +64,7 @@ func main() {
 	flags.StringVar(&fnamedata, "data", "", "path to raw data file to embed")
 	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
 	_ = flags.Parse(os.Args[1:])
-	if fnamein == "" && fnamedata == "" {
+	if fnameout == "" || (fnamein == "" && fnamedata == "" && fnameico == "") {
 		fmt.Fprintf(os.Stderr, usage, os.Args[0], os.Args[0])
 		flags.PrintDefaults()
 		os.Exit(1)
@@ -72,7 +72,7 @@ func main() {
 
 	var err error
 	switch {
-	case fnamein != "":
+	case fnamein != "" || fnameico != "":
 		err = run(fnamein, fnameico, fnameout)
 	case fnamedata != "":
 		err = rundata(fnamedata, fnameout)
@@ -126,25 +126,29 @@ void ·get_NAME(Slice a) {
 }
 
 func run(fnamein, fnameico, fnameout string) error {
-	manifest, err := binutil.SizedOpen(fnamein)
-	if err != nil {
-		return fmt.Errorf("Error opening manifest file '%s': %s", fnamein, err)
-	}
-	defer manifest.Close()
-
 	newid := make(chan uint16)
 	go func() {
 		for i := uint16(1); ; i++ {
 			newid <- i
 		}
 	}()
+
 	coff := coff.NewRSRC()
-	id := <-newid
-	coff.AddResource(RT_MANIFEST, id, manifest)
-	fmt.Println("Manifest ID: ", id)
+
+	if fnamein != "" {
+		manifest, err := binutil.SizedOpen(fnamein)
+		if err != nil {
+			return fmt.Errorf("Error opening manifest file '%s': %s", fnamein, err)
+		}
+		defer manifest.Close()
+
+		id := <-newid
+		coff.AddResource(RT_MANIFEST, id, manifest)
+		fmt.Println("Manifest ID: ", id)
+	}
 	if fnameico != "" {
 		for _, fnameicosingle := range strings.Split(fnameico, ",") {
-			err = addicon(coff, fnameicosingle, newid)
+			err := addicon(coff, fnameicosingle, newid)
 			if err != nil {
 				return err
 			}
@@ -156,14 +160,14 @@ func run(fnamein, fnameico, fnameout string) error {
 	return write(coff, fnameout)
 }
 
-func addicon(coff *coff.Coff, fnameicosingle string, newid <-chan uint16) error {
-	iconsf, err := os.Open(fnameicosingle)
+func addicon(coff *coff.Coff, fname string, newid <-chan uint16) error {
+	f, err := os.Open(fname)
 	if err != nil {
 		return err
 	}
-	//defer iconsf.Close() don't defer, files will be closed by OS when app closes
+	//defer f.Close() don't defer, files will be closed by OS when app closes
 
-	icons, err := ico.DecodeHeaders(iconsf)
+	icons, err := ico.DecodeHeaders(f)
 	if err != nil {
 		return err
 	}
@@ -177,13 +181,13 @@ func addicon(coff *coff.Coff, fnameicosingle string, newid <-chan uint16) error 
 		}}
 		for _, icon := range icons {
 			id := <-newid
-			r := io.NewSectionReader(iconsf, int64(icon.ImageOffset), int64(icon.BytesInRes))
+			r := io.NewSectionReader(f, int64(icon.ImageOffset), int64(icon.BytesInRes))
 			coff.AddResource(RT_ICON, id, r)
 			group.Entries = append(group.Entries, GRPICONDIRENTRY{icon.IconDirEntryCommon, id})
 		}
 		id := <-newid
 		coff.AddResource(RT_GROUP_ICON, id, group)
-		fmt.Println("Icon ", fnameicosingle, " ID: ", id)
+		fmt.Println("Icon ", fname, " ID: ", id)
 	}
 
 	return nil
