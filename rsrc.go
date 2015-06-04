@@ -42,14 +42,9 @@ var usage = `USAGE:
   Generates a .syso file with specified resources embedded in .rsrc section,
   aimed for consumption by Go linker when building Win32 excecutables.
 
-%s -data FILE.dat -o FILE.syso > FILE.c
-  Generates a .syso file with specified opaque binary blob embedded,
-  together with related .c file making it possible to access from Go code.
-  Theoretically cross-platform, but reportedly cannot compile together with cgo.
-
-The generated *.syso and *.c files should get automatically recognized
-by 'go build' command and linked into an executable/library, as long as
-there are any *.go files in the same directory.
+The generated *.syso files should get automatically recognized by 'go build'
+command and linked into an executable/library, as long as there are any *.go
+files in the same directory.
 
 OPTIONS:
 `
@@ -61,11 +56,11 @@ func main() {
 	flags := flag.NewFlagSet("", flag.ContinueOnError)
 	flags.StringVar(&fnamein, "manifest", "", "path to a Windows manifest file to embed")
 	flags.StringVar(&fnameico, "ico", "", "comma-separated list of paths to .ico files to embed")
-	flags.StringVar(&fnamedata, "data", "", "path to raw data file to embed")
+	flags.StringVar(&fnamedata, "data", "", "path to raw data file to embed [WARNING: useless for Go 1.4+]")
 	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
 	_ = flags.Parse(os.Args[1:])
 	if fnameout == "" || (fnamein == "" && fnamedata == "" && fnameico == "") {
-		fmt.Fprintf(os.Stderr, usage, os.Args[0], os.Args[0])
+		fmt.Fprintf(os.Stderr, usage, os.Args[0])
 		flags.PrintDefaults()
 		os.Exit(1)
 	}

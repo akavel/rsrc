@@ -10,20 +10,12 @@ rsrc [-manifest FILE.exe.manifest] [-ico FILE.ico[,FILE2.ico...]] -o FILE.syso
   Icon embedded this way will show up on application's .exe instead of empty icon.
   Manifest file embedded this way will be recognized and detected by Windows.
 
-rsrc -data FILE.dat -o FILE.syso > FILE.c
-  Generates a .syso file with specified opaque binary blob embedded,
-  together with related .c file making it possible to access from Go code.
-  Theoretically cross-platform, but reportedly cannot compile together with cgo.
-
-The generated *.syso and *.c files should get automatically recognized
-by 'go build' command and linked into an executable/library, as long as
-there are any *.go files in the same directory.
-
-NOTE: starting with Go 1.4+, *.c files reportedly won't be linkable any more,
-      see: https://codereview.appspot.com/149720043
+The generated *.syso files should get automatically recognized by 'go build'
+command and linked into an executable/library, as long as there are any *.go
+files in the same directory.
 
 OPTIONS:
-  -data="": path to raw data file to embed
+  -data="": path to raw data file to embed [WARNING: useless for Go 1.4+]
   -ico="": comma-separated list of paths to .ico files to embed
   -manifest="": path to a Windows manifest file to embed
   -o="rsrc.syso": name of output COFF (.res or .syso) file
