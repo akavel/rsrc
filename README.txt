@@ -2,9 +2,6 @@ rsrc - Tool for embedding binary resources in Go programs.
 
 INSTALL: go get github.com/akavel/rsrc
 
-PREBUILT BINARIES for Windows/Linux/MacOSX available via 3rd party site:
-                  http://gobuild.io/download/github.com/akavel/rsrc
-
 USAGE:
 
 rsrc [-manifest FILE.exe.manifest] [-ico FILE.ico[,FILE2.ico...]] -o FILE.syso
