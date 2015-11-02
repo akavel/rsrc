@@ -3,6 +3,7 @@ package coff
 import (
 	"debug/pe"
 	"encoding/binary"
+	"errors"
 	"io"
 	"reflect"
 	"regexp"
@@ -107,8 +108,8 @@ type Coff struct {
 func NewRDATA() *Coff {
 	return &Coff{
 		pe.FileHeader{
-			Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
-			NumberOfSections:     1,      // .data
+			Machine:              pe.IMAGE_FILE_MACHINE_I386,
+			NumberOfSections:     1, // .data
 			TimeDateStamp:        0,
 			NumberOfSymbols:      2, // starting only with '.rdata', will increase; must include auxiliaries, apparently
 			SizeOfOptionalHeader: 0,
@@ -142,6 +143,25 @@ func NewRDATA() *Coff {
 		},
 		[]Sizer{},
 	}
+}
+
+func (coff *Coff) Arch(arch string) error {
+	switch arch {
+	case "386":
+		coff.Machine = pe.IMAGE_FILE_MACHINE_I386
+	case "amd64":
+		// Sources:
+		// https://github.com/golang/go/blob/0e23ca41d99c82d301badf1b762888e2c69e6c57/src/debug/pe/pe.go#L116
+		// https://github.com/yasm/yasm/blob/7160679eee91323db98b0974596c7221eeff772c/modules/objfmts/coff/coff-objfmt.c#L38
+		// FIXME: currently experimental -- not sure if something more doesn't need to be changed
+		coff.Machine = pe.IMAGE_FILE_MACHINE_AMD64
+	case "unknown":
+		// TODO: can this be useful?
+		coff.Machine = pe.IMAGE_FILE_MACHINE_UNKNOWN
+	default:
+		return errors.New("coff: unknown architecture: " + arch)
+	}
+	return nil
 }
 
 //NOTE: only usable for Coff created using NewRDATA
@@ -178,9 +198,9 @@ func (coff *Coff) addSymbol(s string) {
 func NewRSRC() *Coff {
 	return &Coff{
 		pe.FileHeader{
-			Machine:              0x014c, //FIXME: find out how to differentiate this value, or maybe not necessary for Go
-			NumberOfSections:     1,      // .rsrc
-			TimeDateStamp:        0,      // was also 0 in sample data from MinGW's windres.exe
+			Machine:              pe.IMAGE_FILE_MACHINE_I386,
+			NumberOfSections:     1, // .rsrc
+			TimeDateStamp:        0, // was also 0 in sample data from MinGW's windres.exe
 			NumberOfSymbols:      1,
 			SizeOfOptionalHeader: 0,
 			Characteristics:      0x0104, //FIXME: copied from windres.exe output, find out what should be here and why
