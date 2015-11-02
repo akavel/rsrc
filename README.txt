@@ -15,6 +15,7 @@ command and linked into an executable/library, as long as there are any *.go
 files in the same directory.
 
 OPTIONS:
+  -arch="386": architecture of output file - one of: 386, [EXPERIMENTAL: amd64, unknown]
   -data="": path to raw data file to embed [WARNING: useless for Go 1.4+]
   -ico="": comma-separated list of paths to .ico files to embed
   -manifest="": path to a Windows manifest file to embed
