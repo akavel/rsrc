@@ -18,6 +18,6 @@ set FNAME=%APP%_%PLATFORM%
 if "%GOOS%"=="windows" set FNAME=%FNAME%.exe
 :: Do the build
 echo %FNAME%
-go build -v -o %FNAME% .
+go build -i -v -o %FNAME% .
 goto :eof
 
