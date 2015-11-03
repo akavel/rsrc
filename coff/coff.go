@@ -155,9 +155,6 @@ func (coff *Coff) Arch(arch string) error {
 		// https://github.com/yasm/yasm/blob/7160679eee91323db98b0974596c7221eeff772c/modules/objfmts/coff/coff-objfmt.c#L38
 		// FIXME: currently experimental -- not sure if something more doesn't need to be changed
 		coff.Machine = pe.IMAGE_FILE_MACHINE_AMD64
-	case "unknown":
-		// TODO: can this be useful?
-		coff.Machine = pe.IMAGE_FILE_MACHINE_UNKNOWN
 	default:
 		return errors.New("coff: unknown architecture: " + arch)
 	}

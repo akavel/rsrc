@@ -58,7 +58,7 @@ func main() {
 	flags.StringVar(&fnameico, "ico", "", "comma-separated list of paths to .ico files to embed")
 	flags.StringVar(&fnamedata, "data", "", "path to raw data file to embed [WARNING: useless for Go 1.4+]")
 	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
-	flags.StringVar(&arch, "arch", "386", "architecture of output file - one of: 386, [EXPERIMENTAL: amd64, unknown]")
+	flags.StringVar(&arch, "arch", "386", "architecture of output file - one of: 386, [EXPERIMENTAL: amd64]")
 	_ = flags.Parse(os.Args[1:])
 	if fnameout == "" || (fnamein == "" && fnamedata == "" && fnameico == "") {
 		fmt.Fprintf(os.Stderr, usage, os.Args[0])
