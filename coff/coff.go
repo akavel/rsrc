@@ -46,6 +46,14 @@ type RelocationEntry struct {
 	Type        uint16
 }
 
+// Values reverse-engineered from windres output; names from teh Internets.
+// Teh googlies Internets don't seem to have much to say about the AMD64 one,
+// unfortunately :/ but it works...
+const (
+	_IMAGE_REL_AMD64_ADDR32NB = 0x03
+	_IMAGE_REL_I386_DIR32NB   = 0x07
+)
+
 type Auxiliary [18]byte
 
 type Symbol struct {
@@ -80,11 +88,7 @@ var (
 	STRING_RSRC  = [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0}
 	STRING_RDATA = [8]byte{'.', 'r', 'd', 'a', 't', 'a', 0, 0}
 
-	LANG_ENTRY  = DirEntry{NameOrId: 0x0409} //FIXME: language; what value should be here?
-	RELOC_ENTRY = RelocationEntry{
-		SymbolIndex: 0, // "(zero based) index in the Symbol table to which the reference refers. Once you have loaded the COFF file into memory and know where each symbol is, you find the new updated address for the given symbol and update the reference accordingly."
-		Type:        7, // according to ldpe.c, this decodes to: IMAGE_REL_I386_DIR32NB
-	}
+	LANG_ENTRY = DirEntry{NameOrId: 0x0409} //FIXME: language; what value should be here?
 )
 
 type Sizer interface {
@@ -145,6 +149,8 @@ func NewRDATA() *Coff {
 	}
 }
 
+// NOTE: must be called immediately after NewRSRC, before any other
+// functions.
 func (coff *Coff) Arch(arch string) error {
 	switch arch {
 	case "386":
@@ -234,7 +240,21 @@ func NewRSRC() *Coff {
 //NOTE: function assumes that 'id' is increasing on each entry
 //NOTE: only usable for Coff created using NewRSRC
 func (coff *Coff) AddResource(kind uint32, id uint16, data Sizer) {
-	coff.Relocations = append(coff.Relocations, RELOC_ENTRY)
+	re := RelocationEntry{
+		// "(zero based) index in the Symbol table to which the
+		// reference refers.  Once you have loaded the COFF file into
+		// memory and know where each symbol is, you find the new
+		// updated address for the given symbol and update the
+		// reference accordingly."
+		SymbolIndex: 0,
+	}
+	switch coff.Machine {
+	case pe.IMAGE_FILE_MACHINE_I386:
+		re.Type = _IMAGE_REL_I386_DIR32NB
+	case pe.IMAGE_FILE_MACHINE_AMD64:
+		re.Type = _IMAGE_REL_AMD64_ADDR32NB
+	}
+	coff.Relocations = append(coff.Relocations, re)
 	coff.SectionHeader32.NumberOfRelocations++
 
 	// find top level entry, inserting new if necessary at correct sorted position
