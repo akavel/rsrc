@@ -4,7 +4,7 @@ INSTALL: go get github.com/akavel/rsrc
 
 USAGE:
 
-rsrc [-manifest FILE.exe.manifest] [-ico FILE.ico[,FILE2.ico...]] -o FILE.syso
+rsrc [-manifest FILE.exe.manifest] [-ico FILE.ico[,FILE2.ico...]] [-version versioninfo.json] -o FILE.syso
   Generates a .syso file with specified resources embedded in .rsrc section.
   The .syso file can be linked by Go linker when building Win32 executables.
   Icon embedded this way will show up on application's .exe instead of empty icon.
@@ -18,6 +18,7 @@ OPTIONS:
   -arch="386": architecture of output file - one of: 386, [EXPERIMENTAL: amd64]
   -data="": path to raw data file to embed [WARNING: useless for Go 1.4+]
   -ico="": comma-separated list of paths to .ico files to embed
+  -version="": path to a JSON file for version info
   -manifest="": path to a Windows manifest file to embed
   -o="rsrc.syso": name of output COFF (.res or .syso) file
 
