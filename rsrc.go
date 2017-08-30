@@ -49,7 +49,7 @@ func main() {
 	case fnamein != "" || fnameico != "":
 		err = rsrc.Embed(fnameout, arch, fnamein, fnameico)
 	case fnamedata != "":
-		err = embeddata(fnameout, arch, fnamedata)
+		err = embedData(fnameout, arch, fnamedata)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -57,7 +57,7 @@ func main() {
 	}
 }
 
-func embeddata(fnameout, arch, fnamedata string) error {
+func embedData(fnameout, arch, fnamedata string) error {
 	if !strings.HasSuffix(fnameout, ".syso") {
 		return fmt.Errorf("Output file name '%s' must end with '.syso'", fnameout)
 	}
