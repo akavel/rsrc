@@ -75,6 +75,7 @@ const (
 
 	RT_ICON       = 3
 	RT_GROUP_ICON = 3 + 11
+	RT_VERSION    = 16
 	RT_MANIFEST   = 24
 )
 

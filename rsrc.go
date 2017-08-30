@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"reflect"
 	"regexp"
@@ -13,11 +14,13 @@ import (
 	"github.com/akavel/rsrc/binutil"
 	"github.com/akavel/rsrc/coff"
 	"github.com/akavel/rsrc/ico"
+	"github.com/josephspurrier/goversioninfo"
 )
 
 const (
 	RT_ICON       = coff.RT_ICON
 	RT_GROUP_ICON = coff.RT_GROUP_ICON
+	RT_VERSION    = coff.RT_VERSION
 	RT_MANIFEST   = coff.RT_MANIFEST
 )
 
@@ -52,15 +55,16 @@ OPTIONS:
 func main() {
 	//TODO: allow in options advanced specification of multiple resources, as a tree (json?)
 	//FIXME: verify that data file size doesn't exceed uint32 max value
-	var fnamein, fnameico, fnamedata, fnameout, arch string
+	var fnamein, fnameico, fnameversion, fnamedata, fnameout, arch string
 	flags := flag.NewFlagSet("", flag.ContinueOnError)
 	flags.StringVar(&fnamein, "manifest", "", "path to a Windows manifest file to embed")
 	flags.StringVar(&fnameico, "ico", "", "comma-separated list of paths to .ico files to embed")
+	flags.StringVar(&fnameversion, "version", "", "path to a JSON file for version info")
 	flags.StringVar(&fnamedata, "data", "", "path to raw data file to embed [WARNING: useless for Go 1.4+]")
 	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
 	flags.StringVar(&arch, "arch", "386", "architecture of output file - one of: 386, [EXPERIMENTAL: amd64]")
 	_ = flags.Parse(os.Args[1:])
-	if fnameout == "" || (fnamein == "" && fnamedata == "" && fnameico == "") {
+	if fnameout == "" || (fnamein == "" && fnamedata == "" && fnameico == "" && fnameversion == "") {
 		fmt.Fprintf(os.Stderr, usage, os.Args[0])
 		flags.PrintDefaults()
 		os.Exit(1)
@@ -68,8 +72,8 @@ func main() {
 
 	var err error
 	switch {
-	case fnamein != "" || fnameico != "":
-		err = run(fnamein, fnameico, fnameout, arch)
+	case fnamein != "" || fnameico != "" || fnameversion != "":
+		err = run(fnamein, fnameico, fnameversion, fnameout, arch)
 	case fnamedata != "":
 		err = rundata(fnamedata, fnameout, arch)
 	}
@@ -125,7 +129,7 @@ void ·get_NAME(Slice a) {
 	return nil
 }
 
-func run(fnamein, fnameico, fnameout, arch string) error {
+func run(fnamein, fnameico, fnameversion, fnameout, arch string) error {
 	newid := make(chan uint16)
 	go func() {
 		for i := uint16(1); ; i++ {
@@ -156,6 +160,13 @@ func run(fnamein, fnameico, fnameout, arch string) error {
 			if err != nil {
 				return err
 			}
+		}
+	}
+
+	if fnameversion != "" {
+		err := addVersion(coff, fnameversion, newid)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -193,6 +204,45 @@ func addicon(coff *coff.Coff, fname string, newid <-chan uint16) error {
 		coff.AddResource(RT_GROUP_ICON, id, group)
 		fmt.Println("Icon ", fname, " ID: ", id)
 	}
+
+	return nil
+}
+
+func addVersion(coff *coff.Coff, fname string, newid <-chan uint16) error {
+	// Open the config file
+	input, err := os.Open(fname)
+	if err != nil {
+		//log.Printf("Cannot open %q: %v", configFile, err)
+		return err
+	}
+
+	// Read the config file
+	jsonBytes, err := ioutil.ReadAll(input)
+	input.Close()
+	if err != nil {
+		//log.Printf("Error reading %q: %v", configFile, err)
+		return err
+	}
+
+	// Create a new container
+	vi := &goversioninfo.VersionInfo{}
+
+	// Parse the config
+	if err := vi.ParseJSON(jsonBytes); err != nil {
+		//log.Printf("Could not parse the .json file: %v", err)
+		return err
+	}
+
+	// Fill the structures with config data
+	vi.Build()
+
+	// Write the data to a buffer
+	vi.Walk()
+
+	id := <-newid
+
+	// ID 16 is for Version Information
+	coff.AddResource(RT_VERSION, id, goversioninfo.SizedReader{&vi.Buffer})
 
 	return nil
 }
