@@ -35,8 +35,8 @@ func Embed(fnameout, arch, fnamein, fnameico string) error {
 		return lastid
 	}
 
-	c := coff.NewRSRC()
-	err := c.Arch(arch)
+	out := coff.NewRSRC()
+	err := out.Arch(arch)
 	if err != nil {
 		return err
 	}
@@ -49,12 +49,12 @@ func Embed(fnameout, arch, fnamein, fnameico string) error {
 		defer manifest.Close()
 
 		id := newid()
-		c.AddResource(coff.RT_MANIFEST, id, manifest)
+		out.AddResource(coff.RT_MANIFEST, id, manifest)
 		fmt.Println("Manifest ID: ", id)
 	}
 	if fnameico != "" {
 		for _, fnameicosingle := range strings.Split(fnameico, ",") {
-			f, err := addIcon(c, fnameicosingle, newid)
+			f, err := addIcon(out, fnameicosingle, newid)
 			if err != nil {
 				return err
 			}
@@ -62,21 +62,21 @@ func Embed(fnameout, arch, fnamein, fnameico string) error {
 		}
 	}
 
-	c.Freeze()
+	out.Freeze()
 
-	return internal.Write(c, fnameout)
+	return internal.Write(out, fnameout)
 }
 
-func addIcon(c *coff.Coff, fname string, newid func() uint16) (io.Closer, error) {
+func addIcon(out *coff.Coff, fname string, newid func() uint16) (io.Closer, error) {
 	f, err := os.Open(fname)
 	if err != nil {
-		return f, err
+		return nil, err
 	}
 
 	icons, err := ico.DecodeHeaders(f)
 	if err != nil {
 		f.Close()
-		return f, err
+		return nil, err
 	}
 
 	if len(icons) > 0 {
@@ -89,11 +89,11 @@ func addIcon(c *coff.Coff, fname string, newid func() uint16) (io.Closer, error)
 		for _, icon := range icons {
 			id := newid()
 			r := io.NewSectionReader(f, int64(icon.ImageOffset), int64(icon.BytesInRes))
-			c.AddResource(coff.RT_ICON, id, r)
+			out.AddResource(coff.RT_ICON, id, r)
 			group.Entries = append(group.Entries, _GRPICONDIRENTRY{icon.IconDirEntryCommon, id})
 		}
 		id := newid()
-		c.AddResource(coff.RT_GROUP_ICON, id, group)
+		out.AddResource(coff.RT_GROUP_ICON, id, group)
 		fmt.Println("Icon ", fname, " ID: ", id)
 	}
 

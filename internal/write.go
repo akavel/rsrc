@@ -9,6 +9,7 @@ import (
 	"github.com/akavel/rsrc/coff"
 )
 
+// TODO(akavel): maybe promote this to coff.Coff.WriteTo(io.Writer) (int64, error)
 func Write(coff *coff.Coff, fnameout string) error {
 	out, err := os.Create(fnameout)
 	if err != nil {
