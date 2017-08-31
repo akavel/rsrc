@@ -50,7 +50,8 @@ func Embed(fnameout, arch, fnamein, fnameico string) error {
 
 		id := newid()
 		out.AddResource(coff.RT_MANIFEST, id, manifest)
-		fmt.Println("Manifest ID: ", id)
+		// TODO(akavel): reintroduce the Printlns in package main after Embed returns
+		// fmt.Println("Manifest ID: ", id)
 	}
 	if fnameico != "" {
 		for _, fnameicosingle := range strings.Split(fnameico, ",") {
@@ -94,7 +95,8 @@ func addIcon(out *coff.Coff, fname string, newid func() uint16) (io.Closer, erro
 		}
 		id := newid()
 		out.AddResource(coff.RT_GROUP_ICON, id, group)
-		fmt.Println("Icon ", fname, " ID: ", id)
+		// TODO(akavel): reintroduce the Printlns in package main after Embed returns
+		// fmt.Println("Icon ", fname, " ID: ", id)
 	}
 
 	return f, nil
