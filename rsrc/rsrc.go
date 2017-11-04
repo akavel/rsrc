@@ -87,14 +87,14 @@ func addIcon(out *coff.Coff, fname string, newid func() uint16) (io.Closer, erro
 			Type:     1, // magic num.
 			Count:    uint16(len(icons)),
 		}}
+		gid := newid()
 		for _, icon := range icons {
 			id := newid()
 			r := io.NewSectionReader(f, int64(icon.ImageOffset), int64(icon.BytesInRes))
 			out.AddResource(coff.RT_ICON, id, r)
 			group.Entries = append(group.Entries, _GRPICONDIRENTRY{icon.IconDirEntryCommon, id})
 		}
-		id := newid()
-		out.AddResource(coff.RT_GROUP_ICON, id, group)
+		out.AddResource(coff.RT_GROUP_ICON, gid, group)
 		// TODO(akavel): reintroduce the Printlns in package main after Embed returns
 		// fmt.Println("Icon ", fname, " ID: ", id)
 	}
