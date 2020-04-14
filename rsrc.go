@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/akavel/rsrc/coff"
 	"github.com/akavel/rsrc/binutil"
+	"github.com/akavel/rsrc/coff"
 	"github.com/akavel/rsrc/internal"
 	"github.com/akavel/rsrc/rsrc"
 )
@@ -36,7 +36,7 @@ func main() {
 	flags.StringVar(&fnameico, "ico", "", "comma-separated list of paths to .ico files to embed")
 	flags.StringVar(&fnamedata, "data", "", "path to raw data file to embed [WARNING: useless for Go 1.4+]")
 	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
-	flags.StringVar(&arch, "arch", "386", "architecture of output file - one of: 386, [EXPERIMENTAL: amd64]")
+	flags.StringVar(&arch, "arch", "386", "architecture of output file - one of: 386, amd64, [EXPERIMENTAL: arm, arm64]")
 	_ = flags.Parse(os.Args[1:])
 	if fnameout == "" || (fnamein == "" && fnamedata == "" && fnameico == "") {
 		fmt.Fprintf(os.Stderr, usage, os.Args[0])

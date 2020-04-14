@@ -52,10 +52,8 @@ type RelocationEntry struct {
 const (
 	_IMAGE_REL_AMD64_ADDR32NB = 0x03
 	_IMAGE_REL_I386_DIR32NB   = 0x07
-	//#define IMAGE_REL_ARM64_ADDR32NB        0x0002  // 32 bit address w/o image base (RVA: for Data/PData/XData)
 	_IMAGE_REL_ARM64_ADDR32NB = 0x02
-	//#define IMAGE_REL_ARM_ADDR32NB          0x0002  // 32 bit address w/o image base
-	_IMAGE_REL_ARM_ADDR32NB = 0x02
+	_IMAGE_REL_ARM_ADDR32NB   = 0x02
 )
 
 type Auxiliary [18]byte
