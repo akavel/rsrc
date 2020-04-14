@@ -3,3 +3,6 @@ language: go
 go:
   - 1.x
   - master
+os:
+  - windows
+  - linux
