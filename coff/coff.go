@@ -52,6 +52,10 @@ type RelocationEntry struct {
 const (
 	_IMAGE_REL_AMD64_ADDR32NB = 0x03
 	_IMAGE_REL_I386_DIR32NB   = 0x07
+	//#define IMAGE_REL_ARM64_ADDR32NB        0x0002  // 32 bit address w/o image base (RVA: for Data/PData/XData)
+	_IMAGE_REL_ARM64_ADDR32NB = 0x02
+	//#define IMAGE_REL_ARM_ADDR32NB          0x0002  // 32 bit address w/o image base
+	_IMAGE_REL_ARM_ADDR32NB = 0x02
 )
 
 type Auxiliary [18]byte
@@ -161,6 +165,10 @@ func (coff *Coff) Arch(arch string) error {
 		// https://github.com/yasm/yasm/blob/7160679eee91323db98b0974596c7221eeff772c/modules/objfmts/coff/coff-objfmt.c#L38
 		// FIXME: currently experimental -- not sure if something more doesn't need to be changed
 		coff.Machine = pe.IMAGE_FILE_MACHINE_AMD64
+	case "arm":
+		coff.Machine = pe.IMAGE_FILE_MACHINE_ARMNT
+	case "arm64":
+		coff.Machine = pe.IMAGE_FILE_MACHINE_ARM64
 	default:
 		return errors.New("coff: unknown architecture: " + arch)
 	}
@@ -253,6 +261,10 @@ func (coff *Coff) AddResource(kind uint32, id uint16, data Sizer) {
 		re.Type = _IMAGE_REL_I386_DIR32NB
 	case pe.IMAGE_FILE_MACHINE_AMD64:
 		re.Type = _IMAGE_REL_AMD64_ADDR32NB
+	case pe.IMAGE_FILE_MACHINE_ARMNT:
+		re.Type = _IMAGE_REL_ARM_ADDR32NB
+	case pe.IMAGE_FILE_MACHINE_ARM64:
+		re.Type = _IMAGE_REL_ARM64_ADDR32NB
 	}
 	coff.Relocations = append(coff.Relocations, re)
 	coff.SectionHeader32.NumberOfRelocations++
