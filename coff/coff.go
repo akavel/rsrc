@@ -166,8 +166,11 @@ func (coff *Coff) Arch(arch string) error {
 		// FIXME: currently experimental -- not sure if something more doesn't need to be changed
 		coff.Machine = pe.IMAGE_FILE_MACHINE_AMD64
 	case "arm":
+		// see
+		// https://github.com/golang/go/blob/f3424ceff2fa48615ed98580f337ab044925c940/src/cmd/link/internal/ld/pe.go#L736
 		coff.Machine = pe.IMAGE_FILE_MACHINE_ARMNT
 	case "arm64":
+		// Waiting https://github.com/golang/go/issues/36439
 		coff.Machine = pe.IMAGE_FILE_MACHINE_ARM64
 	default:
 		return errors.New("coff: unknown architecture: " + arch)
