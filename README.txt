@@ -4,22 +4,25 @@ INSTALL: go get github.com/akavel/rsrc
 
 USAGE:
 
-rsrc [-manifest FILE.exe.manifest] [-ico FILE.ico[,FILE2.ico...]] -o FILE.syso
-  Generates a .syso file with specified resources embedded in .rsrc section.
-  The .syso file can be linked by Go linker when building Win32 executables.
-  Icon embedded this way will show up on application's .exe instead of empty icon.
-  Manifest file embedded this way will be recognized and detected by Windows.
+rsrc.exe [-manifest FILE.exe.manifest] [-ico FILE.ico[,FILE2.ico...]] -o FILE.syso
+  Generates a .syso file with specified resources embedded in .rsrc section,
+  aimed for consumption by Go linker when building Win32 excecutables.
 
 The generated *.syso files should get automatically recognized by 'go build'
 command and linked into an executable/library, as long as there are any *.go
 files in the same directory.
 
 OPTIONS:
-  -arch="386": architecture of output file - one of: 386, [EXPERIMENTAL: amd64]
-  -data="": path to raw data file to embed [WARNING: useless for Go 1.4+]
-  -ico="": comma-separated list of paths to .ico files to embed
-  -manifest="": path to a Windows manifest file to embed
-  -o="rsrc.syso": name of output COFF (.res or .syso) file
+  -arch string
+    	architecture of output file - one of: 386, amd64, [EXPERIMENTAL: arm, arm64] (default "386")
+  -data string
+    	path to raw data file to embed [WARNING: useless for Go 1.4+]
+  -ico string
+    	comma-separated list of paths to .ico files to embed
+  -manifest string
+    	path to a Windows manifest file to embed
+  -o string
+    	name of output COFF (.res or .syso) file (default "rsrc.syso")
 
 Based on ideas presented by Minux.
 
