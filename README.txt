@@ -31,6 +31,6 @@ TODO MAYBE/LATER:
 - fix or remove FIXMEs
 
 LICENSE: MIT
-  Copyright 2013-2017 The rsrc Authors.
+  Copyright 2013-2020 The rsrc Authors.
 
 http://github.com/akavel/rsrc
