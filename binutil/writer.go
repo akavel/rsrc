@@ -29,5 +29,14 @@ func (w *Writer) WriteFromSized(r SizedReader) {
 	}
 	var n int64
 	n, w.Err = io.CopyN(w.W, r, r.Size())
+	if w.Err != nil {
+		return
+	}
+	aligned := (n-1)&^7 + 8
+	if aligned > n {
+		var z [8]byte
+		w.W.Write(z[:aligned-n])
+		n = aligned
+	}
 	w.Offset += uint32(n)
 }

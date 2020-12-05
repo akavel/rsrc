@@ -336,7 +336,7 @@ func freezeCommon2(v reflect.Value, offset *uint32) error {
 	}
 	vv, ok := v.Interface().(Sizer)
 	if ok {
-		*offset += uint32(vv.Size())
+		*offset += uint32((vv.Size()-1)&^7 + 8)
 		return binutil.WALK_SKIP
 	}
 	return nil
