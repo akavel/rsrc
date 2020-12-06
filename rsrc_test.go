@@ -16,7 +16,7 @@ func TestIconBuildSucceeds(t *testing.T) {
 	dir = filepath.Join(dir, "testdata")
 	// Compile icon in testdata/ dir
 	os.Stdout.Write([]byte("-- compiling icon...\n"))
-	cmd := exec.Command("go", "run", "../rsrc.go", "-ico", "akavel.ico")
+	cmd := exec.Command("go", "run", "../rsrc.go", "-ico", "akavel.ico", "-arch", "amd64")
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -24,6 +24,12 @@ func TestIconBuildSucceeds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	defer os.Setenv("GOOS", os.Getenv("GOOS"))
+	defer os.Setenv("GOARCH", os.Getenv("GOARCH"))
+	os.Setenv("GOOS", "windows")
+	os.Setenv("GOARCH", "amd64")
+
 	// Compile sample app in testdata/ dir, trying to link the icon
 	// compiled above
 	os.Stdout.Write([]byte("-- compiling app...\n"))
@@ -37,7 +43,7 @@ func TestIconBuildSucceeds(t *testing.T) {
 	}
 
 	// If on Windows, check that the compiled app can exec
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
 		os.Stdout.Write([]byte("-- running app...\n"))
 		cmd = &exec.Cmd{
 			Path: "testdata.exe",
