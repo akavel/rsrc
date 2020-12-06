@@ -1,8 +1,22 @@
 language: go
+jobs:
+  allow_failures:
+  - go: master
+  include:
+  - name: -- Default linux build
+    go: 1.x
+    os: linux
+    arch: amd64
+  - name: -- Default windows build
+    go: 1.x
+    os: windows
+    arch: amd64
+  - name: -- Go devel - check future version breakage
+    go: master
+    os: linux
+    arch: amd64
+  - name: -- Ubuntu/IBM (?) cares for ppc64le? see https://github.com/akavel/rsrc/pull/31
+    go: 1.x
+    os: linux
+    arch: ppc64le
 
-go:
-  - 1.x
-  - master
-os:
-  - windows
-  - linux
