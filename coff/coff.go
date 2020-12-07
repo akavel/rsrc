@@ -93,9 +93,8 @@ var (
 	LANG_ENTRY = DirEntry{NameOrId: 0x0409} //FIXME: language; what value should be here?
 )
 
-type Sizer interface {
-	Size() int64 //NOTE: must not exceed limits of uint32, or behavior is undefined
-}
+type Sizer = binutil.Sizer
+type AlignedSizer = binutil.AlignedSizer
 
 type Coff struct {
 	pe.FileHeader
@@ -182,7 +181,7 @@ func (coff *Coff) Arch(arch string) error {
 func (coff *Coff) AddData(symbol string, data Sizer) {
 	coff.addSymbol(symbol)
 	coff.Data = append(coff.Data, data)
-	coff.SectionHeader32.SizeOfRawData += uint32(data.Size())
+	coff.SectionHeader32.SizeOfRawData += uint32(binutil.RoomTaken(data))
 }
 
 // addSymbol appends a symbol to Coff.Symbols and to Coff.Strings.
@@ -336,7 +335,7 @@ func freezeCommon2(v reflect.Value, offset *uint32) error {
 	}
 	vv, ok := v.Interface().(Sizer)
 	if ok {
-		*offset += uint32((vv.Size()-1)&^7 + 8)
+		*offset += uint32(binutil.RoomTaken(vv))
 		return binutil.WALK_SKIP
 	}
 	return nil
@@ -356,7 +355,7 @@ func (coff *Coff) freezeRDATA() {
 		case m.Find(path, RE("^/Data"+N+"$")):
 			n := m[0]
 			coff.Symbols[1+n].Value = offset - diroff // FIXME: is it ok?
-			sz := uint64(coff.Data[n].Size())
+			sz := uint64(binutil.RoomTaken(coff.Data[n]))
 			binary.LittleEndian.PutUint64(coff.Symbols[0].Auxiliaries[0][0:8], binary.LittleEndian.Uint64(coff.Symbols[0].Auxiliaries[0][0:8])+sz)
 		case path == "/StringsHeader":
 			stringsoff = offset

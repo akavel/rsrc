@@ -6,6 +6,8 @@ import (
 	"reflect"
 )
 
+var pad [8]byte
+
 type Writer struct {
 	W      io.Writer
 	Offset uint32 //FIXME: int64?
@@ -32,10 +34,9 @@ func (w *Writer) WriteFromSized(r SizedReader) {
 	if w.Err != nil {
 		return
 	}
-	aligned := (n-1)&^7 + 8
+	aligned := Align(r.Size())
 	if aligned > n {
-		var z [8]byte
-		w.W.Write(z[:aligned-n])
+		w.W.Write(pad[:aligned-n])
 		n = aligned
 	}
 	w.Offset += uint32(n)
