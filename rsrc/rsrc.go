@@ -23,6 +23,10 @@ func (group _GRPICONDIR) Size() int64 {
 	return int64(binary.Size(group.ICONDIR) + len(group.Entries)*binary.Size(group.Entries[0]))
 }
 
+func (group _GRPICONDIR) AlignedSize() int64 {
+	return binutil.Align(group.Size())
+}
+
 type _GRPICONDIRENTRY struct {
 	ico.IconDirEntryCommon
 	Id uint16
