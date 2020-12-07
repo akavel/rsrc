@@ -44,6 +44,16 @@ func walk(v reflect.Value, spath string, walker Walker) error {
 		if stopping(err) {
 			return err
 		}
+		if sz, ok := v.Interface().(AlignedSizer); ok {
+			n := sz.AlignedSize() - sz.Size()
+			if n > 0 {
+				p := pad[:n]
+				err = walk(reflect.ValueOf(p), "", walker)
+				if stopping(err) {
+					return err
+				}
+			}
+		}
 	case reflect.Struct:
 		//t := v.Type()
 		for i := 0; i < v.NumField(); i++ {
