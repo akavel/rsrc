@@ -89,7 +89,7 @@ func addIcon(out *coff.Coff, fname string, newid func() uint16) (io.Closer, erro
 		}}
 		for _, icon := range icons {
 			id := newid()
-			r := io.NewSectionReader(f, int64(icon.ImageOffset), int64(icon.BytesInRes))
+			r := binutil.AlignedSectionReader{SectionReader: io.NewSectionReader(f, int64(icon.ImageOffset), int64(icon.BytesInRes))}
 			out.AddResource(coff.RT_ICON, id, r)
 			group.Entries = append(group.Entries, _GRPICONDIRENTRY{icon.IconDirEntryCommon, id})
 		}

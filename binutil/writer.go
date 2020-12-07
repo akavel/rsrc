@@ -34,7 +34,7 @@ func (w *Writer) WriteFromSized(r SizedReader) {
 	if w.Err != nil {
 		return
 	}
-	aligned := Align(r.Size())
+	aligned := RoomTaken(r)
 	if aligned > n {
 		w.W.Write(pad[:aligned-n])
 		n = aligned
