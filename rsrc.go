@@ -29,7 +29,7 @@ func main() {
 	flags.StringVar(&fnamein, "manifest", "", "path to a Windows manifest file to embed")
 	flags.StringVar(&fnameico, "ico", "", "comma-separated list of paths to .ico files to embed")
 	flags.StringVar(&fnameout, "o", "", "name of output COFF (.res or .syso) file; if set to empty, will default to 'rsrc_windows_{arch}.syso'")
-	flags.StringVar(&arch, "arch", "386", "architecture of output file - one of: 386, amd64, [EXPERIMENTAL: arm, arm64]")
+	flags.StringVar(&arch, "arch", "amd64", "architecture of output file - one of: 386, amd64, [EXPERIMENTAL: arm, arm64]")
 	flags.Usage = func() {
 		fmt.Fprintf(os.Stderr, usage, os.Args[0])
 		flags.PrintDefaults()

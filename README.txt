@@ -14,7 +14,7 @@ files in the same directory.
 
 OPTIONS:
   -arch string
-    	architecture of output file - one of: 386, amd64, [EXPERIMENTAL: arm, arm64] (default "386")
+    	architecture of output file - one of: 386, amd64, [EXPERIMENTAL: arm, arm64] (default "amd64")
   -ico string
     	comma-separated list of paths to .ico files to embed
   -manifest string
