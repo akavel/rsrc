@@ -20,3 +20,11 @@ jobs:
     os: linux
     arch: ppc64le
 
+before_install:
+- |-
+  case $TRAVIS_OS_NAME in
+  windows)
+    choco install upx
+    ;;
+  esac
+
