@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-const name = "rsrc.syso"
+const name = "rsrc_windows_amd64.syso"
 
 func TestBuildSucceeds(t *testing.T) {
 	tests := []struct {
@@ -35,12 +35,18 @@ func TestBuildSucceeds(t *testing.T) {
 			// Compile icon/manifest in testdata/ dir
 			os.Stdout.Write([]byte("-- compiling resource(s)...\n"))
 			defer os.Remove(filepath.Join(dir, name))
-			cmd := exec.Command("go", "run", "../rsrc.go", "-arch", "amd64", "-o", name)
+			cmd := exec.Command("go", "run", "../rsrc.go", "-arch", "amd64")
 			cmd.Args = append(cmd.Args, tt.args...)
 			cmd.Dir = dir
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			err = cmd.Run()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Verify if a .syso file with default name was created
+			_, err = os.Stat(filepath.Join(dir, name))
 			if err != nil {
 				t.Fatal(err)
 			}

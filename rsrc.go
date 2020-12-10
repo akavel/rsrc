@@ -10,7 +10,7 @@ import (
 
 var usage = `USAGE:
 
-%s [-manifest FILE.exe.manifest] [-ico FILE.ico[,FILE2.ico...]] -o FILE.syso
+%s [-manifest FILE.exe.manifest] [-ico FILE.ico[,FILE2.ico...]] [OPTIONS...]
   Generates a .syso file with specified resources embedded in .rsrc section,
   aimed for consumption by Go linker when building Win32 excecutables.
 
@@ -28,16 +28,19 @@ func main() {
 	flags := flag.NewFlagSet("", flag.ExitOnError)
 	flags.StringVar(&fnamein, "manifest", "", "path to a Windows manifest file to embed")
 	flags.StringVar(&fnameico, "ico", "", "comma-separated list of paths to .ico files to embed")
-	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
+	flags.StringVar(&fnameout, "o", "", "name of output COFF (.res or .syso) file; if set to empty, will default to 'rsrc_windows_{arch}.syso'")
 	flags.StringVar(&arch, "arch", "386", "architecture of output file - one of: 386, amd64, [EXPERIMENTAL: arm, arm64]")
 	flags.Usage = func() {
 		fmt.Fprintf(os.Stderr, usage, os.Args[0])
 		flags.PrintDefaults()
 	}
 	_ = flags.Parse(os.Args[1:])
-	if fnameout == "" || (fnamein == "" && fnameico == "") {
+	if fnamein == "" && fnameico == "" {
 		flags.Usage()
 		os.Exit(1)
+	}
+	if fnameout == "" {
+		fnameout = "rsrc_windows_" + arch + ".syso"
 	}
 
 	err := rsrc.Embed(fnameout, arch, fnamein, fnameico)
