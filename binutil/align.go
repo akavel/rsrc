@@ -20,7 +20,7 @@ type AlignedSizer interface {
 }
 
 func Align(s int64) int64 {
-	return (s-1)&^7 + 8
+	return (s + 7) &^ 7
 }
 
 func RoomTaken(s Sizer) int64 {
