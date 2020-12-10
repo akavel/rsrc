@@ -62,6 +62,21 @@ func TestBuildSucceeds(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			// Try running UPX on the executable, if the tool is found in PATH
+			cmd = exec.Command("upx", "testdata.exe")
+			if cmd.Path != "upx" {
+				os.Stdout.Write([]byte("-- running upx...\n"))
+				cmd.Dir = dir
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				err = cmd.Run()
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				os.Stdout.Write([]byte("-- (upx not found)\n"))
+			}
+
 			// If on Windows, check that the compiled app can exec
 			if runtime.GOOS == "windows" && runtime.GOARCH == "amd64" {
 				os.Stdout.Write([]byte("-- running app...\n"))
