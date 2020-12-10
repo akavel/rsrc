@@ -92,6 +92,11 @@ var (
 	LANG_ENTRY = DirEntry{NameOrId: 0x0409} //FIXME: language; what value should be here?
 )
 
+type PaddedData struct {
+	Data    Sizer
+	Padding []byte
+}
+
 type Sizer interface {
 	Size() int64 //NOTE: must not exceed limits of uint32, or behavior is undefined
 }
@@ -102,7 +107,7 @@ type Coff struct {
 
 	*Dir
 	DataEntries []DataEntry
-	Data        []Sizer
+	Data        []PaddedData
 
 	Relocations []RelocationEntry
 	Symbols     []Symbol
@@ -176,7 +181,7 @@ func NewRSRC() *Coff {
 		&Dir{},
 
 		[]DataEntry{},
-		[]Sizer{},
+		[]PaddedData{},
 
 		[]RelocationEntry{},
 
@@ -252,7 +257,14 @@ func (coff *Coff) AddResource(kind uint32, id uint16, data Sizer) {
 
 	// insert new data in correct place
 	coff.DataEntries = append(coff.DataEntries[:n], append([]DataEntry{{Size1: uint32(data.Size())}}, coff.DataEntries[n:]...)...)
-	coff.Data = append(coff.Data[:n], append([]Sizer{data}, coff.Data[n:]...)...)
+	coff.Data = append(coff.Data[:n], append([]PaddedData{pad(data)}, coff.Data[n:]...)...)
+}
+
+func pad(data Sizer) PaddedData {
+	return PaddedData{
+		Data:    data,
+		Padding: make([]byte, (data.Size()+7)&^7),
+	}
 }
 
 // Freeze fills in some important offsets in resulting file.
