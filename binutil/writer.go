@@ -29,15 +29,5 @@ func (w *Writer) WriteFromSized(r SizedReader) {
 	}
 	var n int64
 	n, w.Err = io.CopyN(w.W, r, r.Size())
-	if w.Err != nil {
-		return
-	}
-	aligned := RoomTaken(r)
-	var pad [8]byte
-	_, w.Err = w.W.Write(pad[:aligned-n])
-	if w.Err != nil {
-		return
-	}
-	n = aligned
 	w.Offset += uint32(n)
 }

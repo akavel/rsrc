@@ -17,7 +17,6 @@ type SizedFile struct {
 
 func (r *SizedFile) Read(p []byte) (n int, err error) { return r.s.Read(p) }
 func (r *SizedFile) Size() int64                      { return r.s.Size() }
-func (r *SizedFile) AlignedSize() int64               { return Align(r.s.Size()) }
 func (r *SizedFile) Close() error                     { return r.f.Close() }
 
 func SizedOpen(filename string) (*SizedFile, error) {

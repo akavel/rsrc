@@ -23,10 +23,6 @@ func (group _GRPICONDIR) Size() int64 {
 	return int64(binary.Size(group.ICONDIR) + len(group.Entries)*binary.Size(group.Entries[0]))
 }
 
-func (group _GRPICONDIR) AlignedSize() int64 {
-	return binutil.Align(group.Size())
-}
-
 type _GRPICONDIRENTRY struct {
 	ico.IconDirEntryCommon
 	Id uint16
@@ -93,7 +89,7 @@ func addIcon(out *coff.Coff, fname string, newid func() uint16) (io.Closer, erro
 		}}
 		for _, icon := range icons {
 			id := newid()
-			r := binutil.AlignedSectionReader{io.NewSectionReader(f, int64(icon.ImageOffset), int64(icon.BytesInRes))}
+			r := io.NewSectionReader(f, int64(icon.ImageOffset), int64(icon.BytesInRes))
 			out.AddResource(coff.RT_ICON, id, r)
 			group.Entries = append(group.Entries, _GRPICONDIRENTRY{icon.IconDirEntryCommon, id})
 		}
