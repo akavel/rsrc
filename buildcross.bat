@@ -2,7 +2,10 @@
 rem NOTE: see also:
 rem https://github.com/golang/go/wiki/WindowsCrossCompiling
 rem https://github.com/golang/go/wiki/InstallFromSource#install-c-tools
-for %%p in (windows_386 windows_amd64) do call :build rsrc %%p
+call :build rsrc windows_386
+call :build rsrc windows_amd64
+call :build rsrc linux_amd64
+call :build rsrc darwin_amd64
 set GOOS=
 set GOARCH=
 goto :eof
@@ -17,7 +20,7 @@ call set GOOS=%%PLATFORM:_%GOARCH%=%%
 set FNAME=%APP%_%PLATFORM%
 if "%GOOS%"=="windows" set FNAME=%FNAME%.exe
 :: Do the build
-echo %FNAME%
+echo == %FNAME% ==
 go build -i -v -o %FNAME% .
 goto :eof
 
