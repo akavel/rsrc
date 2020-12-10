@@ -25,15 +25,18 @@ func main() {
 	//TODO: allow in options advanced specification of multiple resources, as a tree (json?)
 	//FIXME: verify that data file size doesn't exceed uint32 max value
 	var fnamein, fnameico, fnameout, arch string
-	flags := flag.NewFlagSet("", flag.ContinueOnError)
+	flags := flag.NewFlagSet("", flag.ExitOnError)
 	flags.StringVar(&fnamein, "manifest", "", "path to a Windows manifest file to embed")
 	flags.StringVar(&fnameico, "ico", "", "comma-separated list of paths to .ico files to embed")
 	flags.StringVar(&fnameout, "o", "rsrc.syso", "name of output COFF (.res or .syso) file")
 	flags.StringVar(&arch, "arch", "386", "architecture of output file - one of: 386, amd64, [EXPERIMENTAL: arm, arm64]")
-	_ = flags.Parse(os.Args[1:])
-	if fnameout == "" || (fnamein == "" && fnameico == "") {
+	flags.Usage = func() {
 		fmt.Fprintf(os.Stderr, usage, os.Args[0])
 		flags.PrintDefaults()
+	}
+	_ = flags.Parse(os.Args[1:])
+	if fnameout == "" || (fnamein == "" && fnameico == "") {
+		flags.Usage()
 		os.Exit(1)
 	}
 
