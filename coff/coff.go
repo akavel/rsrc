@@ -87,8 +87,7 @@ const (
 )
 
 var (
-	STRING_RSRC  = [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0}
-	STRING_RDATA = [8]byte{'.', 'r', 'd', 'a', 't', 'a', 0, 0}
+	STRING_RSRC = [8]byte{'.', 'r', 's', 'r', 'c', 0, 0, 0}
 
 	LANG_ENTRY = DirEntry{NameOrId: 0x0409} //FIXME: language; what value should be here?
 )
@@ -109,46 +108,6 @@ type Coff struct {
 	Symbols     []Symbol
 	StringsHeader
 	Strings []Sizer
-}
-
-func NewRDATA() *Coff {
-	return &Coff{
-		pe.FileHeader{
-			Machine:              pe.IMAGE_FILE_MACHINE_I386,
-			NumberOfSections:     1, // .data
-			TimeDateStamp:        0,
-			NumberOfSymbols:      2, // starting only with '.rdata', will increase; must include auxiliaries, apparently
-			SizeOfOptionalHeader: 0,
-			Characteristics:      0x0105, //http://www.delorie.com/djgpp/doc/coff/filhdr.html
-		},
-		pe.SectionHeader32{
-			Name:            STRING_RDATA,
-			Characteristics: 0x40000040, // "INITIALIZED_DATA MEM_READ" ?
-		},
-
-		// "directory hierarchy" of .rsrc section; empty for .data function
-		nil,
-		[]DataEntry{},
-
-		[]Sizer{},
-
-		[]RelocationEntry{},
-
-		[]Symbol{Symbol{
-			Name:           STRING_RDATA,
-			Value:          0,
-			SectionNumber:  1,
-			Type:           0, // FIXME: wtf?
-			StorageClass:   3, // FIXME: is it ok? and uint8? and what does the value mean?
-			AuxiliaryCount: 1,
-			Auxiliaries:    []Auxiliary{{}}, //http://www6.cptec.inpe.br/sx4/sx4man2/g1af01e/chap5.html
-		}},
-
-		StringsHeader{
-			Length: uint32(binary.Size(StringsHeader{})), // empty strings table for now -- but we must still show size of the table's header...
-		},
-		[]Sizer{},
-	}
 }
 
 // NOTE: must be called immediately after NewRSRC, before any other
@@ -174,15 +133,6 @@ func (coff *Coff) Arch(arch string) error {
 		return errors.New("coff: unknown architecture: " + arch)
 	}
 	return nil
-}
-
-//NOTE: only usable for Coff created using NewRDATA
-//NOTE: symbol names must be probably >8 characters long
-//NOTE: symbol names should not contain embedded zeroes
-func (coff *Coff) AddData(symbol string, data Sizer) {
-	coff.addSymbol(symbol)
-	coff.Data = append(coff.Data, data)
-	coff.SectionHeader32.SizeOfRawData += uint32(data.Size())
 }
 
 // addSymbol appends a symbol to Coff.Symbols and to Coff.Strings.
@@ -310,8 +260,6 @@ func (coff *Coff) Freeze() {
 	switch coff.SectionHeader32.Name {
 	case STRING_RSRC:
 		coff.freezeRSRC()
-	case STRING_RDATA:
-		coff.freezeRDATA()
 	}
 }
 
@@ -340,33 +288,6 @@ func freezeCommon2(v reflect.Value, offset *uint32) error {
 		return binutil.WALK_SKIP
 	}
 	return nil
-}
-
-func (coff *Coff) freezeRDATA() {
-	var offset, diroff, stringsoff uint32
-	binutil.Walk(coff, func(v reflect.Value, path string) error {
-		diroff = coff.freezeCommon1(path, offset, diroff)
-
-		RE := regexp.MustCompile
-		const N = `\[(\d+)\]`
-		m := matcher{}
-		//TODO: adjust symbol pointers
-		//TODO: fill Symbols.Name, .Value
-		switch {
-		case m.Find(path, RE("^/Data"+N+"$")):
-			n := m[0]
-			coff.Symbols[1+n].Value = offset - diroff // FIXME: is it ok?
-			sz := uint64(coff.Data[n].Size())
-			binary.LittleEndian.PutUint64(coff.Symbols[0].Auxiliaries[0][0:8], binary.LittleEndian.Uint64(coff.Symbols[0].Auxiliaries[0][0:8])+sz)
-		case path == "/StringsHeader":
-			stringsoff = offset
-		case m.Find(path, RE("^/Strings"+N+"$")):
-			binary.LittleEndian.PutUint32(coff.Symbols[m[0]+1].Name[4:8], offset-stringsoff)
-		}
-
-		return freezeCommon2(v, &offset)
-	})
-	coff.SectionHeader32.PointerToRelocations = 0
 }
 
 func (coff *Coff) freezeRSRC() {
