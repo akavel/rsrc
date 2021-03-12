@@ -263,7 +263,7 @@ func (coff *Coff) AddResource(kind uint32, id uint16, data Sizer) {
 func pad(data Sizer) PaddedData {
 	return PaddedData{
 		Data:    data,
-		Padding: make([]byte, (data.Size()+7)&^7),
+		Padding: make([]byte, -data.Size()&7),
 	}
 }
 

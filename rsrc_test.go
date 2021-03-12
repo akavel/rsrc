@@ -18,6 +18,9 @@ func TestBuildSucceeds(t *testing.T) {
 		comment: "icon",
 		args:    []string{"-ico", "akavel.ico"},
 	}, {
+		comment: "unaligned icon (?) - issue #26",
+		args:    []string{"-ico", "syncthing.ico"},
+	}, {
 		comment: "manifest",
 		args:    []string{"-manifest", "manifest.xml"},
 	}, {
