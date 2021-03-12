@@ -35,3 +35,11 @@ LICENSE: MIT
   Copyright 2013-2020 The rsrc Authors.
 
 http://github.com/akavel/rsrc
+
+(NOTE: This project is currently in low-priority maintenance mode. I welcome
+ bug reports and sometimes try to address them, but this happens very randomly.
+ If it works for you, that's great and I'm happy! Still, and especially if not,
+ you might like to check the following more featureful alternative from @tc-hib
+ who is a very nice guy:
+ https://github.com/tc-hib/go-winres)
+
