@@ -3,9 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 
-	"github.com/akavel/rsrc/rsrc"
+	"github.com/dentalwings/rsrc/rsrc"
 )
 
 var usage = `USAGE:
@@ -24,10 +25,18 @@ OPTIONS:
 func main() {
 	//TODO: allow in options advanced specification of multiple resources, as a tree (json?)
 	//FIXME: verify that data file size doesn't exceed uint32 max value
-	var fnamein, fnameico, fnameout, arch string
+	var (
+		fnamein      string
+		fnameico     string
+		fnameversion string
+		fnameout     string
+		arch         string
+	)
+
 	flags := flag.NewFlagSet("", flag.ExitOnError)
 	flags.StringVar(&fnamein, "manifest", "", "path to a Windows manifest file to embed")
 	flags.StringVar(&fnameico, "ico", "", "comma-separated list of paths to .ico files to embed")
+	flags.StringVar(&fnameversion, "version", "", "path to a JSON file for version info")
 	flags.StringVar(&fnameout, "o", "", "name of output COFF (.res or .syso) file; if set to empty, will default to 'rsrc_windows_{arch}.syso'")
 	flags.StringVar(&arch, "arch", "amd64", "architecture of output file - one of: 386, amd64, [EXPERIMENTAL: arm, arm64]")
 	flags.Usage = func() {
@@ -43,9 +52,10 @@ func main() {
 		fnameout = "rsrc_windows_" + arch + ".syso"
 	}
 
-	err := rsrc.Embed(fnameout, arch, fnamein, fnameico)
+	ids, err := rsrc.Embed(fnameout, arch, fnamein, fnameico, fnameversion)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		log.Fatal("embedding rsrc error: ", err)
 	}
+
+	rsrc.PrintIds(ids)
 }

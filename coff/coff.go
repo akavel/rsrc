@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/akavel/rsrc/binutil"
+	"github.com/dentalwings/rsrc/binutil"
 )
 
 type Dir struct { // struct IMAGE_RESOURCE_DIRECTORY
@@ -77,6 +77,7 @@ const (
 
 	RT_ICON       = 3
 	RT_GROUP_ICON = 3 + 11
+	RT_VERSION    = 16
 	RT_MANIFEST   = 24
 )
 
@@ -141,8 +142,8 @@ func (coff *Coff) Arch(arch string) error {
 }
 
 // addSymbol appends a symbol to Coff.Symbols and to Coff.Strings.
-//NOTE: symbol s must be probably >8 characters long
-//NOTE: symbol s should not contain embedded zeroes
+// NOTE: symbol s must be probably >8 characters long
+// NOTE: symbol s should not contain embedded zeroes
 func (coff *Coff) addSymbol(s string) {
 	coff.FileHeader.NumberOfSymbols++
 
@@ -185,7 +186,7 @@ func NewRSRC() *Coff {
 
 		[]RelocationEntry{},
 
-		[]Symbol{Symbol{
+		[]Symbol{{
 			Name:           STRING_RSRC,
 			Value:          0,
 			SectionNumber:  1,
@@ -201,8 +202,8 @@ func NewRSRC() *Coff {
 	}
 }
 
-//NOTE: function assumes that 'id' is increasing on each entry
-//NOTE: only usable for Coff created using NewRSRC
+// NOTE: function assumes that 'id' is increasing on each entry
+// NOTE: only usable for Coff created using NewRSRC
 func (coff *Coff) AddResource(kind uint32, id uint16, data Sizer) {
 	re := RelocationEntry{
 		// "(zero based) index in the Symbol table to which the

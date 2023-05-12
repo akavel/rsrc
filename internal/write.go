@@ -5,8 +5,8 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/akavel/rsrc/binutil"
-	"github.com/akavel/rsrc/coff"
+	"github.com/dentalwings/rsrc/binutil"
+	"github.com/dentalwings/rsrc/coff"
 )
 
 // TODO(akavel): maybe promote this to coff.Coff.WriteTo(io.Writer) (int64, error)
@@ -33,7 +33,7 @@ func Write(coff *coff.Coff, fnameout string) error {
 	})
 
 	if w.Err != nil {
-		return fmt.Errorf("Error writing output file: %s", w.Err)
+		return fmt.Errorf("writing output file: %s", w.Err)
 	}
 
 	return nil
